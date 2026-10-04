@@ -20,7 +20,9 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
-import config  # noqa: F401 — you'll use this in search_listings
+import re
+
+import config
 from generate import generate
 from utils.data_loader import load_listings
 
@@ -78,8 +80,46 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    requested_tokens = set(re.findall(r"[a-z0-9]+", description.casefold()))
+    normalized_size = " ".join(size.casefold().split()) if size is not None else None
+    alpha_size = bool(normalized_size and re.fullmatch(r"[a-z]+", normalized_size))
+    scored_listings = []
+
+    for listing in load_listings():
+        if max_price is not None and listing["price"] > max_price:
+            continue
+
+        if normalized_size is not None:
+            listing_size = " ".join(listing["size"].casefold().split())
+            if alpha_size:
+                listing_size_tokens = re.findall(r"[a-z]+", listing_size)
+                if normalized_size not in listing_size_tokens:
+                    continue
+            elif normalized_size != listing_size:
+                continue
+
+        searchable_values = [
+            listing["title"],
+            listing["description"],
+            listing["category"],
+            *listing["style_tags"],
+            *listing["colors"],
+        ]
+        if listing["brand"] is not None:
+            searchable_values.append(listing["brand"])
+
+        searchable_tokens = set(
+            re.findall(r"[a-z0-9]+", " ".join(searchable_values).casefold())
+        )
+        score = len(requested_tokens & searchable_tokens)
+        if score:
+            scored_listings.append((score, listing))
+
+    scored_listings.sort(key=lambda scored: scored[0], reverse=True)
+    return [
+        listing
+        for _, listing in scored_listings[:config.SEARCH_RESULT_LIMIT]
+    ]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -112,8 +152,72 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    wardrobe_items = wardrobe.get("items") or []
+
+    colors = ", ".join(new_item.get("colors") or []) or "Not listed"
+    style_tags = ", ".join(new_item.get("style_tags") or []) or "Not listed"
+    price = new_item.get("price")
+    formatted_price = (
+        f"${price:.2f}" if isinstance(price, (int, float)) else "Not listed"
+    )
+    item_details = "\n".join(
+        [
+            f"Title: {new_item.get('title') or 'Untitled item'}",
+            f"Description: {new_item.get('description') or 'Not listed'}",
+            f"Category: {new_item.get('category') or 'Not listed'}",
+            f"Size: {new_item.get('size') or 'Not listed'}",
+            f"Condition: {new_item.get('condition') or 'Not listed'}",
+            f"Price: {formatted_price}",
+            f"Colors: {colors}",
+            f"Style tags: {style_tags}",
+            f"Brand: {new_item.get('brand') or 'Not listed'}",
+            f"Platform: {new_item.get('platform') or 'Not listed'}",
+        ]
+    )
+
+    if wardrobe_items:
+        formatted_wardrobe = []
+        for index, item in enumerate(wardrobe_items, start=1):
+            item_colors = ", ".join(item.get("colors") or []) or "Not listed"
+            item_tags = ", ".join(item.get("style_tags") or []) or "Not listed"
+            formatted_wardrobe.append(
+                "\n".join(
+                    [
+                        f"Wardrobe item {index}:",
+                        f"Name: {item.get('name') or 'Unnamed item'}",
+                        f"Category: {item.get('category') or 'Not listed'}",
+                        f"Colors: {item_colors}",
+                        f"Style tags: {item_tags}",
+                        f"Notes: {item.get('notes') or 'None'}",
+                    ]
+                )
+            )
+
+        wardrobe_details = "\n\n".join(formatted_wardrobe)
+        prompt = (
+            "Suggest 1-2 outfit ideas for the listing below using pieces from "
+            "the saved wardrobe. Use the exact saved item names in each idea, "
+            "and do not invent wardrobe pieces.\n\n"
+            f"Listing:\n{item_details}\n\n"
+            f"Saved wardrobe:\n{wardrobe_details}"
+        )
+    else:
+        prompt = (
+            "Give general styling advice for the listing below. Suggest types "
+            "of clothing, shoes, or accessories that could work with it. Do not "
+            "claim that the user owns any suggested pieces.\n\n"
+            f"Listing:\n{item_details}"
+        )
+
+    response = generate(prompt).strip()
+    if response:
+        return response
+
+    return (
+        "For a flexible outfit, style this item with simple neutral basics, "
+        "balance its proportions, and choose shoes and accessories that echo "
+        "one of its colors."
+    )
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -152,5 +256,39 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    cleaned_outfit = outfit.strip()
+    if not cleaned_outfit:
+        return "I couldn't create a fit card because the outfit suggestion was empty."
+
+    title = new_item["title"]
+    price = f"${new_item['price']:.2f}"
+    platform = new_item["platform"]
+    colors = ", ".join(new_item.get("colors") or []) or "Not listed"
+    style_tags = ", ".join(new_item.get("style_tags") or []) or "Not listed"
+
+    prompt = (
+        "Write a social-media fit card caption in 2-4 sentences (two to four "
+        "sentences). In the caption, mention the item, its exact price, and its "
+        "platform exactly once each. Describe the outfit's specific vibe rather "
+        "than writing a generic product description.\n\n"
+        f"Title: {title}\n"
+        f"Description: {new_item.get('description') or 'Not listed'}\n"
+        f"Category: {new_item.get('category') or 'Not listed'}\n"
+        f"Condition: {new_item.get('condition') or 'Not listed'}\n"
+        f"Colors: {colors}\n"
+        f"Style tags: {style_tags}\n"
+        f"Price: {price}\n"
+        f"Platform: {platform}\n"
+        f"Outfit: {cleaned_outfit}"
+    )
+
+    response = generate(prompt).strip()
+    if response:
+        return response
+
+    fallback_outfit = re.sub(r"[.!?]+(?=\s|$)", ";", cleaned_outfit)
+    fallback_outfit = re.sub(r"\s*;\s*", "; ", fallback_outfit).strip(" ;")
+    return (
+        f"{title} is a {price} find from {platform}. "
+        f"Wear it with {fallback_outfit} for an easy, put-together look."
+    )

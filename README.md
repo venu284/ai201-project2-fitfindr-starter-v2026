@@ -120,18 +120,65 @@ $ python app.py ask '...'
 **The three tools, tested one at a time**
 
 ```
-$ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
-
+$ .venv/bin/python -c "from tools import search_listings; matches=search_listings('vintage graphic tee', size='M', max_price=30); empty=search_listings('designer ballgown', size='XXS', max_price=5); print({'matches': [(item['id'], item['title'], item['size'], item['price']) for item in matches], 'empty': empty})"
+{'matches': [('lst_002', 'Y2K Baby Tee — Butterfly Print', 'S/M', 18.0), ('lst_017', 'Mesh Long-Sleeve Top — Black', 'S/M', 15.0), ('lst_013', '90s Silk Slip Dress — Floral, Midi Length', 'M', 30.0), ('lst_020', 'Henley Long Sleeve — Washed Burgundy', 'M', 16.0), ('lst_024', 'Vintage Polo Shirt — Forest Green', 'M', 18.0), ('lst_029', 'Silk Button-Down — Sage Green', 'M', 28.0), ('lst_030', 'Vintage Knit Vest — Argyle Brown/Cream', 'M', 25.0), ('lst_038', 'Denim Vest — Medium Wash, Studded', 'M', 27.0)], 'empty': []}
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; ..."
+$ .venv/bin/python -c "from tools import suggest_outfit; from utils.data_loader import get_empty_wardrobe, get_example_wardrobe, load_listings; item=load_listings()[1]; print('SAVED WARDROBE:'); print(suggest_outfit(item, get_example_wardrobe())); print('EMPTY WARDROBE:'); print(suggest_outfit(item, get_empty_wardrobe()))"
+SAVED WARDROBE:
+Here are 2 outfit ideas for the Y2K Baby Tee — Butterfly Print using items from your saved wardrobe:
 
+**Outfit Idea 1: Y2K Streetwear Look**
+* **Top:** Y2K Baby Tee — Butterfly Print
+* **Bottoms:** Baggy straight-leg jeans, dark wash
+* **Outerwear:** Vintage black denim jacket
+* **Shoes:** Chunky white sneakers
+* **Accessories:** Black crossbody bag
+
+**Outfit Idea 2: Casual Retro Contrast**
+* **Top:** Y2K Baby Tee — Butterfly Print
+* **Bottoms:** Wide-leg khaki trousers
+* **Accessories:** Brown leather belt and Black crossbody bag
+* **Shoes:** Chunky white sneakers
+EMPTY WARDROBE:
+Here is some general styling advice for this Y2K butterfly baby tee, along with clothing, shoe, and accessory suggestions to build a complete look around the item:
+
+### Styling Vibe
+Since this piece bridges the gap between Y2K pop culture and soft cottagecore, you can lean into either aesthetic depending on the mood. The fitted, cropped silhouette looks best balanced with either low-rise bottoms (for true Y2K nostalgia) or flowy, high-waisted pieces (to play up the cottagecore tag).
+
+### Clothing Pairings
+*   **Bottoms:**
+    *   Low-rise, wide-leg cargo pants or parachute pants in beige, white, or pastel pink to emphasize the 2000s street style.
+    *   A denim cargo miniskirt or a pleated tennis skirt for a playful, school-girl Y2K look.
+    *   A flowy, tiered midi skirt in white or floral print to lean into the cottagecore aesthetic.
+    *   Classic low-rise flare jeans with a slight wash.
+*   **Outerwear:**
+    *   A white zip-up hoodie or a cropped pastel cardigan left unbuttoned.
+    *   A faux-fur trim jacket for extra early-2000s pop star energy.
+
+### Shoe Suggestions
+*   Platform sandals or chunky slide sandals.
+*   Retro-style sneakers (like chunky skate shoes or pastel-accented trainers).
+*   Strappy kitten-heel sandals for a dressed-up casual look.
+*   Strappy flat sandals if leaning toward the cottagecore vibe.
+
+### Accessories
+*   **Bags:** A small nylon shoulder bag (baguette bag), a beaded mini handbag, or a canvas crossbody bag.
+*   **Jewelry:** Layered silver or beaded choker necklaces, butterfly hair clips (claws or butterfly pins), and hoop earrings.
+*   **Extras:** Rimless tinted sunglasses (pink or purple gradient lenses) and a pastel claw clip for an easy updo.
 ```
 
 ```
-$ python -c "from tools import create_fit_card; ..."
-
+$ .venv/bin/python -c "import config; config.CACHE_ENABLED=False; from tools import create_fit_card; from utils.data_loader import load_listings; item=load_listings()[1]; outfit='Baggy straight-leg jeans, dark wash with the Vintage black denim jacket and Chunky white sneakers.'; cards=[create_fit_card(outfit, item) for _ in range(3)]; print('CARD 1:'); print(cards[0]); print('CARD 2:'); print(cards[1]); print('CARD 3:'); print(cards[2]); print('EMPTY OUTFIT:'); print(create_fit_card('   ', item))"
+CARD 1:
+Channel pure early-2000s pop star energy by pairing this Y2K Baby Tee — Butterfly Print with baggy dark-wash jeans and chunky kicks. It's the ultimate nostalgic, effortless street style look for everyday wear. Snag this nostalgic top right now on depop for just $18.00!
+CARD 2:
+Channel nostalgic early 2000s energy with this dreamy Y2K Baby Tee — Butterfly Print, paired effortlessly with baggy dark-wash jeans, a distressed black denim jacket, and chunky white sneakers. Score this ultimate vintage graphic top for just $18.00 right now on depop. It's the ultimate low-effort, high-impact fit for effortless everyday styling.
+CARD 3:
+Channel major pop-princess energy with this Y2K Baby Tee — Butterfly Print paired with baggy dark-wash denim and chunky white sneakers. Grab this nostalgic piece for just $18.00 over on depop to complete your ultimate retro streetwear fit.
+EMPTY OUTFIT:
+I couldn't create a fit card because the outfit suggestion was empty.
 ```
 
 ---
