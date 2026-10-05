@@ -93,3 +93,9 @@ CACHE_DIR = ROOT / ".cache"
 
 DATA_DIR = ROOT / "data"
 RESULTS_DIR = ROOT / "results"
+WARDROBE_MEMORY_PATH = Path(
+    os.getenv(
+        "FITFINDR_WARDROBE_PATH",
+        str(ROOT / ".fitfindr" / "wardrobe.json"),
+    )
+)

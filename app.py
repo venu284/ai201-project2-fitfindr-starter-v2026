@@ -8,6 +8,9 @@ FitFindr — command line.
     python app.py listings                browse the data  (Milestone 1)
     python app.py fields                  what fields a listing has
     python app.py examples                queries worth trying, including a dud
+    python app.py wardrobe remember PATH  save a wardrobe between CLI runs
+    python app.py wardrobe show           print the remembered wardrobe
+    python app.py wardrobe forget         return to the example wardrobe
 
 Add --trace to any `ask` to print the loop step by step.
 
@@ -104,6 +107,38 @@ def cmd_examples(args):
     )
 
 
+def cmd_wardrobe_remember(args):
+    """Validate and save a wardrobe for future CLI queries."""
+    from utils.wardrobe_memory import remember_wardrobe
+
+    wardrobe = remember_wardrobe(args.path)
+    count = len(wardrobe["items"])
+    print(f"Remembered {count} wardrobe items in {config.WARDROBE_MEMORY_PATH}.")
+
+
+def cmd_wardrobe_show(args):
+    """Print the wardrobe saved for future CLI queries."""
+    import json
+
+    from utils.wardrobe_memory import load_remembered_wardrobe
+
+    wardrobe = load_remembered_wardrobe()
+    if wardrobe is None:
+        print("No remembered wardrobe. Future asks will use the example wardrobe.")
+        return
+    print(json.dumps(wardrobe, indent=2, ensure_ascii=False))
+
+
+def cmd_wardrobe_forget(args):
+    """Remove the wardrobe saved for future CLI queries."""
+    from utils.wardrobe_memory import forget_remembered_wardrobe
+
+    if forget_remembered_wardrobe():
+        print("Forgot the remembered wardrobe. Future asks will use the example wardrobe.")
+    else:
+        print("No remembered wardrobe was saved.")
+
+
 def _ask_one(query, wardrobe, use_trace):
     from agent import run_agent
     import trace as trace_module
@@ -142,13 +177,29 @@ def _ask_one(query, wardrobe, use_trace):
     return session
 
 
+def _wardrobe_for_ask(empty_wardrobe: bool) -> tuple[dict, str]:
+    """Choose the wardrobe for one CLI session and report where it came from."""
+    from utils.data_loader import get_empty_wardrobe, get_example_wardrobe
+
+    if empty_wardrobe:
+        return get_empty_wardrobe(), "empty override"
+
+    from utils.wardrobe_memory import load_remembered_wardrobe
+
+    remembered = load_remembered_wardrobe()
+    if remembered is not None:
+        return remembered, "remembered"
+    return get_example_wardrobe(), "example"
+
+
 def cmd_ask(args):
-    from utils.data_loader import get_example_wardrobe, get_empty_wardrobe
     import generate
 
-    wardrobe = get_empty_wardrobe() if args.empty_wardrobe else get_example_wardrobe()
-    if args.empty_wardrobe:
+    wardrobe, wardrobe_source = _wardrobe_for_ask(args.empty_wardrobe)
+    if wardrobe_source == "empty override":
         print("(running with an empty wardrobe)")
+    elif wardrobe_source == "remembered":
+        print(f"(using remembered wardrobe with {len(wardrobe['items'])} items)")
 
     try:
         if args.query:
@@ -187,6 +238,30 @@ def build_parser():
 
     p_ex = sub.add_parser("examples", help="queries worth trying")
     p_ex.set_defaults(func=cmd_examples)
+
+    p_wardrobe = sub.add_parser(
+        "wardrobe",
+        help="remember, show, or forget a wardrobe between CLI runs",
+    )
+    wardrobe_sub = p_wardrobe.add_subparsers(
+        dest="wardrobe_command",
+        required=True,
+    )
+    p_remember = wardrobe_sub.add_parser(
+        "remember",
+        help="import a wardrobe JSON file",
+    )
+    p_remember.add_argument("path", help="JSON file shaped as {'items': [...]}")
+    p_remember.set_defaults(func=cmd_wardrobe_remember)
+
+    p_show = wardrobe_sub.add_parser("show", help="print the remembered wardrobe")
+    p_show.set_defaults(func=cmd_wardrobe_show)
+
+    p_forget = wardrobe_sub.add_parser(
+        "forget",
+        help="delete the remembered wardrobe",
+    )
+    p_forget.set_defaults(func=cmd_wardrobe_forget)
 
     p_ask = sub.add_parser("ask", help="run the agent")
     p_ask.add_argument("query", nargs="?")

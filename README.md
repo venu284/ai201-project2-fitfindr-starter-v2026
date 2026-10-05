@@ -46,16 +46,19 @@ maximum price, and searches a local listings dataset. If nothing matches, it
 stops and tells the user to broaden the keywords, try another size, or raise the
 price limit. Otherwise it keeps the first listing, combines it with the user's
 wardrobe (or gives general advice if the wardrobe is empty), and writes a short
-fit-card caption. The stretch features below add a price check.
+fit-card caption. The stretch features below add a price check and a remembered
+wardrobe.
 
 ### Stretch Features
 
-FitFindr adds these optional stretch features:
+FitFindr adds all three optional stretch features:
 
 - A fourth tool, `compare_price`, compares the selected listing with the
   median price of other listings in the same category.
 - A second planning-loop branch calls that tool when several listings match
   and skips it with a clear note when exactly one listing matches.
+- Style memory lets the CLI import a wardrobe once and reuse it in later
+  runs until the user forgets it.
 
 ---
 
@@ -243,6 +246,30 @@ $ .venv/bin/python app.py ask 'argyle'
   Fit card: Channel your inner scholar with this moody dark academia fit, built around a cozy Vintage Knit Vest — Argyle Brown/Cream layered over a crisp tank and paired with wide-leg trousers. Snag this preppy earth-toned essential for just $25.00 before it finds a new semester on thredUp!
 
 2 model calls this session, 845 prompt + 227 output tokens
+```
+
+**Style memory across separate runs**
+
+Relevant lines from the real terminal output:
+
+```
+$ .venv/bin/python app.py wardrobe remember data/remembered_wardrobe.example.json
+Remembered 2 wardrobe items in /Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.fitfindr/wardrobe.json.
+
+$ .venv/bin/python app.py ask 'denim jacket under $50'
+(using remembered wardrobe with 2 items)
+
+  Found:    Denim Jacket — Light Wash, Cropped — $42.0 on poshmark
+
+  Price:    This $42.00 listing is $2.00 above the $40.00 median for outerwear, based on 7 comparable listings.
+
+  Outfit:   **Outfit Idea 1: Casual Streetwear**
+*   Outerwear: Denim Jacket — Light Wash, Cropped
+*   Bottoms: Emerald pleated trousers
+*   Shoes: Cream canvas sneakers
+
+$ .venv/bin/python app.py wardrobe forget
+Forgot the remembered wardrobe. Future asks will use the example wardrobe.
 ```
 
 ---

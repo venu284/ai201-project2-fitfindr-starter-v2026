@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "id": "saved_001",
+      "name": "Emerald pleated trousers",
+      "category": "bottoms",
+      "colors": ["emerald"],
+      "style_tags": ["preppy", "tailored"],
+      "notes": "High waisted"
+    },
+    {
+      "id": "saved_002",
+      "name": "Cream canvas sneakers",
+      "category": "shoes",
+      "colors": ["cream"],
+      "style_tags": ["casual"],
+      "notes": null
+    }
+  ]
+}
