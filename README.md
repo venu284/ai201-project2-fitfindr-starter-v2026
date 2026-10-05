@@ -254,7 +254,7 @@ Relevant lines from the real terminal output:
 
 ```
 $ .venv/bin/python app.py wardrobe remember data/remembered_wardrobe.example.json
-Remembered 2 wardrobe items in /Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.fitfindr/wardrobe.json.
+Remembered 2 wardrobe items in .fitfindr/wardrobe.json.
 
 $ .venv/bin/python app.py ask 'denim jacket under $50'
 (using remembered wardrobe with 2 items)
@@ -300,7 +300,8 @@ Forgot the remembered wardrobe. Future asks will use the example wardrobe.
   against the tool contract.
 - *What came back:* It found that an outfit containing periods or exclamation
   marks could make the fallback longer than two sentences.
-- *What I changed:* I added a regression check and normalized sentence-ending
+- *What I changed:* I added a regression check
+  (`tests/test_fit_card_fallback.py`) and normalized sentence-ending
   punctuation in the outfit before constructing the two-sentence fallback.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
