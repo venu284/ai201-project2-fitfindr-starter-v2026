@@ -13,8 +13,8 @@
 > python app.py ask 'vintage graphic tee under $30'
 > ```
 >
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
+> That command runs the completed agent through listing search, outfit ideas,
+> and a fit-card caption.
 >
 > **The rest of this file is your submission.** Fill it in as you go.
 
@@ -41,7 +41,12 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
-
+FitFindr takes a plain-language thrift request, including keywords, size, and
+maximum price, and searches a local listings dataset. If nothing matches, it
+stops and tells the user to broaden the keywords, try another size, or raise the
+price limit. Otherwise it keeps the first listing, combines it with the user's
+wardrobe (or gives general advice if the wardrobe is empty), and writes a short
+fit-card caption.
 
 ---
 
@@ -108,7 +113,7 @@
 <!-- Two things go here.
 
      1. One FULL query and its output, pasted as text.
-     2. Your three per-tool terminal tests — the command and what it printed. -->
+     2. Your per-tool terminal tests — the command and what it printed. -->
 
 **One full query**
 
@@ -134,7 +139,7 @@ $ python app.py ask 'vintage graphic tee under $30'
 
   Fit card: Channel ultimate nostalgic energy with this butterfly graphic Y2K Baby Tee — Butterfly Print, perfect for pairing with baggy denim for an effortless retro streetwear vibe. Grab it now on depop for just $18.00 to complete your go-to cropped aesthetic!
 
-1 model calls this session, 1 served from cache, 293 prompt + 53 output tokens
+0 model calls this session, 2 served from cache
 ```
 
 **The three tools, tested one at a time**
@@ -214,15 +219,23 @@ I couldn't create a fit card because the outfit suggestion was empty.
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I gave AI all five acceptance criteria and asked it to
+  explain exactly how it would test each one using only what the criterion said.
+- *What came back:* The review found that the fit-card criterion did not define
+  its observable facts tightly enough, so different reviewers could score the
+  same output differently.
+- *What I changed:* I required a non-empty two-to-four-sentence card containing
+  the selected listing's platform and its price with two decimal places in at
+  least four of five tries.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked AI to review `create_fit_card` and its fallback
+  against the tool contract.
+- *What came back:* It found that an outfit containing periods or exclamation
+  marks could make the fallback longer than two sentences.
+- *What I changed:* I added a regression check and normalized sentence-ending
+  punctuation in the outfit before constructing the two-sentence fallback.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
