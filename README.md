@@ -46,7 +46,16 @@ maximum price, and searches a local listings dataset. If nothing matches, it
 stops and tells the user to broaden the keywords, try another size, or raise the
 price limit. Otherwise it keeps the first listing, combines it with the user's
 wardrobe (or gives general advice if the wardrobe is empty), and writes a short
-fit-card caption.
+fit-card caption. The stretch features below add a price check.
+
+### Stretch Features
+
+FitFindr adds these optional stretch features:
+
+- A fourth tool, `compare_price`, compares the selected listing with the
+  median price of other listings in the same category.
+- A second planning-loop branch calls that tool when several listings match
+  and skips it with a clear note when exactly one listing matches.
 
 ---
 
@@ -83,6 +92,13 @@ fit-card caption.
 - **Returns:** A two-to-four-sentence caption that names the item, its price, and its platform once each, and describes the outfit's vibe.
 - **When it has nothing:** If `outfit` is empty or contains only whitespace, returns a descriptive fallback message instead of raising an error.
 
+### `compare_price`
+
+- **What it does:** Compares the selected listing's price with the median price of every other listing in the same category.
+- **Inputs:** `new_item` (dict, the selected listing with `id`, `category`, and numeric `price` fields).
+- **Returns:** A dictionary with `status`, `category`, `item_price`, `median_price`, `difference`, `comparable_count`, and `message`. The status is `below_median`, `at_median`, or `above_median` when comparison is possible.
+- **When it has nothing:** Returns the same dictionary shape with `status` set to `unavailable`, both `median_price` and `difference` set to `None`, and a message explaining why.
+
 ---
 
 ## Planning Loop
@@ -98,13 +114,13 @@ fit-card caption.
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:** If `search_listings` returns an empty list, store a message in `session["error"]` telling the user to try broader keywords, a different size, or a higher price limit, then stop. Otherwise, store the first result in `session["selected_item"]`, pass that item and `session["wardrobe"]` to `suggest_outfit`, and then pass the outfit suggestion and selected item to `create_fit_card`.
+**Branch rules:** If `search_listings` returns an empty list, store a message in `session["error"]` telling the user to try broader keywords, a different size, or a higher price limit, then stop. Otherwise, store the first result in `session["selected_item"]`. If exactly one listing matched, skip `compare_price` and record why. If several listings matched, call `compare_price` with the selected item. Both matching paths then call `suggest_outfit` and `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
 
 **How the query is parsed:** `agent.py::run_agent` uses regular expressions. It recognizes `size <value>` as the size and `under`, `below`, or `less than` followed by a dollar amount as the maximum price. It removes those parts from the query and uses the remaining text as the description.
 
-**What moves through the session:** The session stores the original `query`, then the parsed `description`, `size`, and `max_price`. `search_listings` stores its results in `search_results`. The first result moves to `selected_item`, which passes to `suggest_outfit` with the saved `wardrobe`. The returned string moves to `outfit_suggestion`, then `outfit_suggestion` and `selected_item` pass to `create_fit_card`, whose result is stored in `fit_card`.
+**What moves through the session:** The session stores the original `query`, then the parsed `description`, `size`, and `max_price`. `search_listings` stores its results in `search_results`. The first result moves to `selected_item`. The match-count branch stores either the fourth tool's return value or the skip reason in `price_comparison`. The selected item then passes to `suggest_outfit` with the saved `wardrobe`. The returned string moves to `outfit_suggestion`, then `outfit_suggestion` and `selected_item` pass to `create_fit_card`, whose result is stored in `fit_card`.
 
 ---
 
@@ -121,6 +137,8 @@ fit-card caption.
 $ python app.py ask 'vintage graphic tee under $30'
 
   Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Price:    This $18.00 listing is $3.50 below the $21.50 median for tops, based on 14 comparable listings.
 
   Outfit:   Here are 2 outfit ideas for the Y2K Baby Tee — Butterfly Print using items from your saved wardrobe:
 
@@ -142,7 +160,7 @@ $ python app.py ask 'vintage graphic tee under $30'
 0 model calls this session, 2 served from cache
 ```
 
-**The three tools, tested one at a time**
+**The four tools, tested one at a time**
 
 ```
 $ .venv/bin/python -c "from tools import search_listings; matches=search_listings('vintage graphic tee', size='M', max_price=30); empty=search_listings('designer ballgown', size='XXS', max_price=5); print({'matches': [(item['id'], item['title'], item['size'], item['price']) for item in matches], 'empty': empty})"
@@ -204,6 +222,27 @@ CARD 3:
 Channel major pop-princess energy with this Y2K Baby Tee — Butterfly Print paired with baggy dark-wash denim and chunky white sneakers. Grab this nostalgic piece for just $18.00 over on depop to complete your ultimate retro streetwear fit.
 EMPTY OUTFIT:
 I couldn't create a fit card because the outfit suggestion was empty.
+```
+
+```
+$ .venv/bin/python -c "from tools import compare_price; from utils.data_loader import load_listings; item=next(x for x in load_listings() if x['id']=='lst_002'); print(compare_price(item))"
+{'status': 'below_median', 'category': 'tops', 'item_price': 18.0, 'median_price': 21.5, 'difference': -3.5, 'comparable_count': 14, 'message': 'This $18.00 listing is $3.50 below the $21.50 median for tops, based on 14 comparable listings.'}
+```
+
+**Second branch: one matching listing**
+
+Relevant lines from the real terminal output:
+
+```
+$ .venv/bin/python app.py ask 'argyle'
+
+  Found:    Vintage Knit Vest — Argyle Brown/Cream — $25.0 on thredUp
+
+  Price:    Only one listing matched, so FitFindr skipped price comparison.
+
+  Fit card: Channel your inner scholar with this moody dark academia fit, built around a cozy Vintage Knit Vest — Argyle Brown/Cream layered over a crisp tank and paired with wide-leg trousers. Snag this preppy earth-toned essential for just $25.00 before it finds a new semester on thredUp!
+
+2 model calls this session, 845 prompt + 227 output tokens
 ```
 
 ---

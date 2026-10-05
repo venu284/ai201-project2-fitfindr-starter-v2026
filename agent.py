@@ -17,7 +17,7 @@ import re
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card
+from tools import compare_price, create_fit_card, search_listings, suggest_outfit
 from generate import ModelUnavailable
 
 
@@ -42,6 +42,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "parsed": {},                # description / size / max_price you pulled out of it
         "search_results": [],        # everything search_listings returned
         "selected_item": None,       # the one you chose — goes into suggest_outfit
+        "price_comparison": None,    # compare_price result, or why it was skipped
         "wardrobe": wardrobe,        # the user's wardrobe
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
@@ -90,13 +91,17 @@ def run_agent(query: str, wardrobe: dict) -> dict:
       5. Choose an item — the first result is fine. Put it in
          session["selected_item"].
 
-      6. Call suggest_outfit() with the selected item and the wardrobe.
+      6. If one listing matched, record why price comparison was skipped. If
+         several matched, call compare_price() with the selected item. Put the
+         result in session["price_comparison"].
+
+      7. Call suggest_outfit() with the selected item and the wardrobe.
          Put the result in session["outfit_suggestion"].
 
-      7. Call create_fit_card() with the outfit and the item.
+      8. Call create_fit_card() with the outfit and the item.
          Put the result in session["fit_card"].
 
-      8. Return the session.
+      9. Return the session.
 
     ─────────────────────────────────────────────────────────────────────────
     IN UNIT 4 you come back and add two things:
@@ -141,6 +146,21 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             return session
 
         session["selected_item"] = session["search_results"][0]
+        if len(session["search_results"]) == 1:
+            session["price_comparison"] = {
+                "status": "skipped_single_match",
+                "category": session["selected_item"].get("category"),
+                "item_price": session["selected_item"].get("price"),
+                "median_price": None,
+                "difference": None,
+                "comparable_count": 0,
+                "message": (
+                    "Only one listing matched, so FitFindr skipped price comparison."
+                ),
+            }
+        else:
+            session["price_comparison"] = compare_price(session["selected_item"])
+
         session["outfit_suggestion"] = suggest_outfit(
             session["selected_item"], session["wardrobe"]
         )
@@ -160,6 +180,9 @@ def _show(session: dict) -> None:
 
     item = session["selected_item"] or {}
     print(f"  found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
+    comparison = session.get("price_comparison") or {}
+    if comparison.get("message"):
+        print(f"  price:    {comparison['message']}")
     print(f"  outfit:   {session['outfit_suggestion']}")
     print(f"  fit card: {session['fit_card']}")
 

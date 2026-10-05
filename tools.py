@@ -1,17 +1,14 @@
 """
-The three FitFindr tools.
+The four FitFindr tools.
 
 Each one is a standalone function you can call and test on its own, before any
-of them are wired into the loop. Build and test them one at a time — three
-untested tools joined by a loop is one problem that looks like six, because you
-can't tell which layer is lying to you.
+of them are wired into the loop. Build and test them one at a time. Four
+untested tools joined by a loop make failures hard to locate.
 
     search_listings(description, size, max_price)  → list[dict]
     suggest_outfit(new_item, wardrobe)             → str
     create_fit_card(outfit, new_item)              → str
-
-All three are stubs right now. They run and they do nothing — that's the
-starting position and it's deliberate.
+    compare_price(new_item)                        → dict
 
 ⚠️ Before you write any of them, fill in the **Tool Inventory** section of your
 README (Milestone 2). Four lines per tool: what it does, each input with its
@@ -21,6 +18,7 @@ the description has to say what is *in* the list.
 """
 
 import re
+from statistics import median
 
 import config
 from generate import generate
@@ -292,3 +290,74 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         f"{title} is a {price} find from {platform}. "
         f"Wear it with {fallback_outfit} for an easy, put-together look."
     )
+
+
+# ── Tool 4: compare_price ─────────────────────────────────────────────────────
+
+def compare_price(new_item: dict) -> dict:
+    """Compare a listing's price with other listings in the same category."""
+    category = new_item.get("category")
+    price = new_item.get("price")
+    numeric_price = isinstance(price, (int, float)) and not isinstance(price, bool)
+
+    base = {
+        "category": category,
+        "item_price": float(price) if numeric_price else None,
+        "median_price": None,
+        "difference": None,
+        "comparable_count": 0,
+    }
+
+    if not isinstance(category, str) or not category.strip() or not numeric_price:
+        return {
+            "status": "unavailable",
+            **base,
+            "message": (
+                "Price comparison is unavailable because the listing needs a "
+                "numeric price and category."
+            ),
+        }
+
+    comparable_prices = [
+        float(listing["price"])
+        for listing in load_listings()
+        if listing.get("category") == category
+        and listing.get("id") != new_item.get("id")
+        and isinstance(listing.get("price"), (int, float))
+        and not isinstance(listing.get("price"), bool)
+    ]
+    if not comparable_prices:
+        return {
+            "status": "unavailable",
+            **base,
+            "message": (
+                "Price comparison is unavailable because no other listings "
+                f"share the {category} category."
+            ),
+        }
+
+    median_price = float(median(comparable_prices))
+    difference = round(float(price) - median_price, 2)
+    if difference < 0:
+        status = "below_median"
+        position = f"${abs(difference):.2f} below"
+    elif difference > 0:
+        status = "above_median"
+        position = f"${difference:.2f} above"
+    else:
+        status = "at_median"
+        position = "equal to"
+
+    return {
+        "status": status,
+        "category": category,
+        "item_price": float(price),
+        "median_price": median_price,
+        "difference": difference,
+        "comparable_count": len(comparable_prices),
+        "message": (
+            f"This ${float(price):.2f} listing is {position} the ${median_price:.2f} "
+            f"median for {category}, based on {len(comparable_prices)} comparable "
+            "listings."
+        ),
+    }
