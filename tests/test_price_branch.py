@@ -54,7 +54,7 @@ class PriceBranchTests(unittest.TestCase):
 
     def test_empty_search_stops_before_price_and_model_tools(self):
         with (
-            patch.object(agent, "search_listings", return_value=[]),
+            patch.object(agent, "call_tool", return_value=[], create=True) as search,
             patch.object(agent, "compare_price", create=True) as compare,
             patch.object(agent, "suggest_outfit") as suggest,
             patch.object(agent, "create_fit_card") as create,
@@ -64,13 +64,14 @@ class PriceBranchTests(unittest.TestCase):
         self.assertIsNone(session.get("price_comparison"))
         self.assertIsNone(session["fit_card"])
         self.assertIsNotNone(session["error"])
+        search.assert_called_once_with("search_listings", session["parsed"])
         compare.assert_not_called()
         suggest.assert_not_called()
         create.assert_not_called()
 
     def test_one_match_skips_price_tool_and_keeps_first_result(self):
         with (
-            patch.object(agent, "search_listings", return_value=[self.first]),
+            patch.object(agent, "call_tool", return_value=[self.first], create=True) as search,
             patch.object(agent, "compare_price", create=True) as compare,
             patch.object(agent, "suggest_outfit", return_value="saved outfit") as suggest,
             patch.object(agent, "create_fit_card", return_value="saved card") as create,
@@ -78,6 +79,7 @@ class PriceBranchTests(unittest.TestCase):
             session = agent.run_agent("argyle", self.wardrobe)
 
         self.assertIs(self.first, session["selected_item"])
+        search.assert_called_once_with("search_listings", session["parsed"])
         self.assertEqual("skipped_single_match", session["price_comparison"]["status"])
         self.assertIn("one listing", session["price_comparison"]["message"].lower())
         compare.assert_not_called()
@@ -95,7 +97,7 @@ class PriceBranchTests(unittest.TestCase):
             "message": "comparison",
         }
         with (
-            patch.object(agent, "search_listings", return_value=[self.first, self.second]),
+            patch.object(agent, "call_tool", return_value=[self.first, self.second], create=True) as search,
             patch.object(
                 agent, "compare_price", return_value=comparison, create=True
             ) as compare,
@@ -105,6 +107,7 @@ class PriceBranchTests(unittest.TestCase):
             session = agent.run_agent("vintage tee", self.wardrobe)
 
         self.assertIs(self.first, session["selected_item"])
+        search.assert_called_once_with("search_listings", session["parsed"])
         self.assertIs(comparison, session["price_comparison"])
         compare.assert_called_once_with(self.first)
         suggest.assert_called_once_with(self.first, self.wardrobe)

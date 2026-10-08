@@ -395,11 +395,14 @@ that produced it:
 
 ```
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
+**On the MCP move:** `search_listings` is registered in `mcp_server.py` with
+`description: str`, optional `size: str`, and optional `max_price: float` in
+dollars. `agent.py::run_agent` calls it through `mcp_client.call_tool`; the
+other tools remain direct Python calls. `python mcp_client.py` listed exactly
+this tool and its input schema. A direct-versus-MCP check returned equal lists
+for both a matching query and an empty search. A normal `app.py ask` query
+still returned the Y2K Baby Tee, the price comparison, an outfit suggestion,
+and a fit card. That full run used cached model responses.
 
 
 ---
