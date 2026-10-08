@@ -386,14 +386,79 @@ that produced it:
 **Happy path**
 
 ```
-
+$ .venv/bin/python app.py ask 'vintage graphic tee under $30' --trace
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: description='vintage graphic tee', size=None, max_price=30.0
+[2] search_listings (via MCP)
+      in:  description='vintage graphic tee', size=None, max_price=30.0
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+[3] select_item
+      in:  first of 10 matches
+      out: id=lst_002, title=Y2K Baby Tee — Butterfly Print
+[4] compare_price
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: This $18.00 listing is $3.50 below the $21.50 median for tops, based on 14 comparable listings.
+[5] suggest_outfit
+      in:  new_item_id=lst_002, wardrobe_items=10, first_item='Baggy straight-leg jeans, dark wash'
+      out: Here are 2 outfit ideas for the Y2K Baby Tee — Butterfly Print using items from your saved wardrobe:  **Outfit…
+[6] create_fit_card
+      in:  new_item_id=lst_002, outfit=Here are 2 outfit ideas for the Y2K Baby Tee — Butterfly Print using items from yo…
+      out: Channel ultimate nostalgic energy with this butterfly graphic Y2K Baby Tee — Butterfly Print, perfect for pair…
 ```
+
+The full query returned the selected listing, price comparison, outfit, and
+fit card. Its two model responses came from the build cache; the MCP search
+and loop still ran for this query.
 
 **Empty search**
 
 ```
+$ .venv/bin/python app.py ask 'designer ballgown size XXS under $5' --trace
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: description='designer ballgown', size='XXS', max_price=5.0
+[2] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+[3] search_results branch
+      in:  0 matches
+      out: No listings matched. Try broader keywords, a different size, or a higher price limit.
+      →    stop
+
+  No listings matched. Try broader keywords, a different size, or a higher price limit.
+```
+
+**Failure checks**
+
+The empty-search message above names the missing listings and three constraints
+the user can change. No model tool ran.
+
+With `--empty-wardrobe`, the CLI said `(running with an empty wardrobe)` and
+`suggest_outfit` returned general advice rather than stopping. An excerpt of
+the returned advice is:
 
 ```
+Here is general styling advice for the light wash, cropped denim jacket from Wrangler:
+
+### Clothing Pairings
+*   **High-Waisted Bottoms:** Since the jacket is cropped, pairing it with high-waisted mom jeans, straight-leg trousers, or a high-rise midi skirt helps balance proportions and defines the waist.
+```
+
+That run produced a fit card too. The first run made two model calls; a repeated
+check returned the same response from the build cache.
+
+For model unavailability, I set an invalid key only for one process and turned
+the build cache off. The real `.env` file was not edited. The model rejected
+the key, and `run_agent` returned this message without a traceback:
+
+```
+$ GEMINI_API_KEY=invalid-milestone2-check AI201_CACHE=0 .venv/bin/python app.py ask 'plaid flannel shirt size XL under $29 for milestone two key check' --trace
+The model couldn't be reached while suggesting an outfit. Check GEMINI_API_KEY and your internet connection, then try again.
+```
+
+The trace for that run ended at `suggest_outfit`. Its `create_fit_card` step was
+not called. A matching handler covers a model failure during fit-card creation.
 
 **On the MCP move:** `search_listings` is registered in `mcp_server.py` with
 `description: str`, optional `size: str`, and optional `max_price: float` in

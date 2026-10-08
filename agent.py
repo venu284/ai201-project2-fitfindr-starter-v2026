@@ -138,15 +138,32 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             "size": size_match.group(1) if size_match else None,
             "max_price": float(price_match.group(1)) if price_match else None,
         }
+        search_inputs = (
+            f"description={description!r}, size={session['parsed']['size']!r}, "
+            f"max_price={session['parsed']['max_price']!r}"
+        )
+        trace.step("parse_query", inputs=query, returned=search_inputs)
 
         session["search_results"] = call_tool("search_listings", session["parsed"])
+        trace.step(
+            "search_listings (via MCP)",
+            inputs=search_inputs,
+            returned=session["search_results"],
+        )
         if not session["search_results"]:
             session["error"] = (
-                "Try broader keywords, a different size, or a higher price limit."
+                "No listings matched. Try broader keywords, a different size, "
+                "or a higher price limit."
             )
+            trace.step("search_results branch", inputs="0 matches", returned=session["error"], note="stop")
             return session
 
         session["selected_item"] = session["search_results"][0]
+        trace.step(
+            "select_item",
+            inputs=f"first of {len(session['search_results'])} matches",
+            returned=f"id={session['selected_item']['id']}, title={session['selected_item']['title']}",
+        )
         if len(session["search_results"]) == 1:
             session["price_comparison"] = {
                 "status": "skipped_single_match",
@@ -159,15 +176,56 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                     "Only one listing matched, so FitFindr skipped price comparison."
                 ),
             }
+            trace.step(
+                "compare_price (skipped)",
+                inputs="1 match",
+                returned=session["price_comparison"]["message"],
+            )
         else:
             session["price_comparison"] = compare_price(session["selected_item"])
+            trace.step(
+                "compare_price",
+                inputs=session["selected_item"],
+                returned=session["price_comparison"]["message"],
+            )
 
-        session["outfit_suggestion"] = suggest_outfit(
-            session["selected_item"], session["wardrobe"]
+        wardrobe_items = session["wardrobe"].get("items") or []
+        first_wardrobe_item = wardrobe_items[0].get("name") if wardrobe_items else None
+        outfit_inputs = (
+            f"new_item_id={session['selected_item']['id']}, "
+            f"wardrobe_items={len(wardrobe_items)}, first_item={first_wardrobe_item!r}"
         )
-        session["fit_card"] = create_fit_card(
-            session["outfit_suggestion"], session["selected_item"]
+        try:
+            session["outfit_suggestion"] = suggest_outfit(
+                session["selected_item"], session["wardrobe"]
+            )
+        except ModelUnavailable:
+            session["error"] = (
+                "The model couldn't be reached while suggesting an outfit. "
+                "Check GEMINI_API_KEY and your internet connection, then try again."
+            )
+            trace.step("suggest_outfit", inputs=outfit_inputs, returned=session["error"])
+            return session
+        trace.step(
+            "suggest_outfit", inputs=outfit_inputs, returned=session["outfit_suggestion"]
         )
+
+        fit_inputs = (
+            f"new_item_id={session['selected_item']['id']}, "
+            f"outfit={session['outfit_suggestion']}"
+        )
+        try:
+            session["fit_card"] = create_fit_card(
+                session["outfit_suggestion"], session["selected_item"]
+            )
+        except ModelUnavailable:
+            session["error"] = (
+                "The model couldn't be reached while creating the fit card. "
+                "Check GEMINI_API_KEY and your internet connection, then try again."
+            )
+            trace.step("create_fit_card", inputs=fit_inputs, returned=session["error"])
+            return session
+        trace.step("create_fit_card", inputs=fit_inputs, returned=session["fit_card"])
         return session
 
 

@@ -29,13 +29,15 @@ import config
 
 _lines: list[str] = []
 _step_number = 0
+_tracing = False
 
 
 def start_trace() -> None:
     """Clear the trace. Call this at the start of each run."""
-    global _step_number
+    global _step_number, _tracing
     _lines.clear()
     _step_number = 0
+    _tracing = True
 
 
 def step(name: str, inputs=None, returned=None, note: str = "") -> None:
@@ -50,6 +52,8 @@ def step(name: str, inputs=None, returned=None, note: str = "") -> None:
         note:     an optional word on why, e.g. "branch: empty, stopping".
     """
     global _step_number
+    if not _tracing:
+        return
     _step_number += 1
 
     line = f"[{_step_number}] {name}"
@@ -66,6 +70,8 @@ def step(name: str, inputs=None, returned=None, note: str = "") -> None:
 
 def get_trace() -> str:
     """The whole trace as text, ready to paste into your README."""
+    global _tracing
+    _tracing = False
     return "\n".join(_lines)
 
 
