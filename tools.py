@@ -220,6 +220,19 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
 
+def _fit_card_meets_contract(card: str, price: str, platform: str) -> bool:
+    sentences = [
+        sentence
+        for sentence in re.split(r"(?<=[.!?])\s+", card.strip())
+        if sentence
+    ]
+    return (
+        2 <= len(sentences) <= 4
+        and card.count(price) == 1
+        and card.casefold().count(platform.casefold()) == 1
+    )
+
+
 def create_fit_card(outfit: str, new_item: dict) -> str:
     """
     Write a short caption someone would actually post about the find.
@@ -234,6 +247,9 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         A two-to-four sentence caption.
         If `outfit` is empty or whitespace, return a descriptive message rather
         than raising.
+        If the model response is empty or does not contain two to four sentences,
+        the exact price, and the platform, return a deterministic two-sentence
+        fallback.
 
     The caption should read like a real post rather than a product description,
     mention the item and its price and platform once each, and be specific about
@@ -281,7 +297,7 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     )
 
     response = generate(prompt).strip()
-    if response:
+    if response and _fit_card_meets_contract(response, price, platform):
         return response
 
     fallback_outfit = re.sub(r"[.!?]+(?=\s|$)", ";", cleaned_outfit)

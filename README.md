@@ -548,22 +548,48 @@ and a fit card. That full run used cached model responses.
 
 **What I changed:**
 
+`tools.py::create_fit_card` now checks every model response before returning
+it. A passing response has two to four sentences and contains the selected
+listing's exact two-decimal price and platform once each. If the response
+misses any check, the tool returns its existing deterministic fallback without
+making another model call.
+
 **Which failure it was meant to fix:**
+
+The before run had no observed miss, but criterion 4 depends on unconstrained
+model output and its 4-of-5 target permits one card to omit a shopper fact.
+The new check closes that gap at the tool boundary. A regression test forces a
+nonempty response with no price or platform and confirms that the tool rejects
+it.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Selected listing reaches the outfit tool unchanged | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card includes the shopper facts | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Search respects the maximum price | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
 **Did it help, and how do I know:**
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+The measured scores did not change: every criterion scored 5 of 5 before and
+after. The new regression test shows the narrower improvement. Before the
+change, `create_fit_card` returned a nonempty two-sentence response that omitted
+both `$18.00` and `depop`; after the change, the same response produces the
+contract-compliant fallback.
+
+The after run used the same scenarios with caching off. It completed 25 tries
+and made 40 model calls while the built-in 15-request-per-minute limiter paced
+the run. The complete output is in
+[`results/run_2026-10-11_1042_after.md`](results/run_2026-10-11_1042_after.md).
+
+**Criterion 4, try 1 output:**
+
+```
+Channel peak early 2000s energy with this dreamy butterfly graphic tee, styled effortlessly for casual vintage coffee runs or nostalgic streetwear nights. Snag the Y2K Baby Tee — Butterfly Print for $18.00 and lock down your ultimate retro aesthetic. Grab it now exclusively on depop!
+```
 
 
 
@@ -575,6 +601,11 @@ and a fit card. That full run used cached model responses.
      you did. "I ran out of time" is fine if it's true. Pretending nothing is
      left is not. -->
 
+No criterion missed its target in the after run. The evaluation still repeats
+one matching query and selects `lst_002` on every matching path, so it does not
+show whether the fit-card check behaves consistently across other prices,
+platforms, or listing text. The focused regression test covers one deliberately
+incomplete model response, not every malformed response a model could produce.
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
