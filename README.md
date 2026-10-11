@@ -304,6 +304,19 @@ Forgot the remembered wardrobe. Future asks will use the example wardrobe.
   (`tests/test_fit_card_fallback.py`) and normalized sentence-ending
   punctuation in the outfit before constructing the two-sentence fallback.
 
+**Moment 3**
+
+- *What I asked for:* I asked AI to argue against my five criterion verdicts
+  using the original targets and all 25 before-run results, then to recommend
+  one improvement from the weakest point it found.
+- *What came back:* It found no mis-scored pass, but it pointed out that the
+  model could still return a nonempty fit card without the exact price or
+  platform. The repeated evaluation also covered only one selected listing.
+- *What I changed:* I first added a test that forced a two-sentence response
+  with no price or platform and watched it fail. I then added the
+  `create_fit_card` contract check, ran the same 25 tries with the rate limiter
+  unchanged, and reported that every score stayed at 5 of 5.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
@@ -532,9 +545,10 @@ not called. A matching handler covers a model failure during fit-card creation.
 dollars. `agent.py::run_agent` calls it through `mcp_client.call_tool`; the
 other tools remain direct Python calls. `python mcp_client.py` listed exactly
 this tool and its input schema. A direct-versus-MCP check returned equal lists
-for both a matching query and an empty search. A normal `app.py ask` query
-still returned the Y2K Baby Tee, the price comparison, an outfit suggestion,
-and a fit card. That full run used cached model responses.
+for both a matching query and an empty search. Behavior did not change after
+the move: a normal `app.py ask` query still returned the Y2K Baby Tee, the
+price comparison, an outfit suggestion, and a fit card. That full run used
+cached model responses.
 
 
 ---
@@ -606,6 +620,15 @@ one matching query and selects `lst_002` on every matching path, so it does not
 show whether the fit-card check behaves consistently across other prices,
 platforms, or listing text. The focused regression test covers one deliberately
 incomplete model response, not every malformed response a model could produce.
+I stopped there because this unit allowed one system improvement and required
+the same scenarios before and after. Adding more validators or changing the
+scenario inputs would make it harder to attribute the measured result to that
+one change.
+
+## Submission
+
+Repository URL, unchanged from the previous unit:
+[github.com/venu284/ai201-project2-fitfindr-starter-v2026](https://github.com/venu284/ai201-project2-fitfindr-starter-v2026)
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
