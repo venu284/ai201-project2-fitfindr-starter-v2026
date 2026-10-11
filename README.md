@@ -418,15 +418,23 @@ at the inclusive `$30.00` limit.
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | Matching query completes all three tools | 4 of 5 | MET (5/5) | Each try called `search_listings`, `suggest_outfit`, and `create_fit_card` and returned a fit card. |
+| 2 | Impossible query stops before the second tool | 5 of 5 | MET (5/5) | Each search returned no listings; the loop stopped before `suggest_outfit` and told the user to broaden keywords, change size, or raise the price limit. |
+| 3 | Selected listing reaches the outfit tool unchanged | 5 of 5 | MET (5/5) | In every try, the first search result, `session["selected_item"]`, and the `new_item` passed to `suggest_outfit` had ID `lst_002`. |
+| 4 | Fit card includes the shopper facts | 4 of 5 | MET (5/5) | All five cards were nonempty, had three sentences, named `depop`, and showed the selected item's price as `$18.00`. |
+| 5 | Search results respect the maximum price | 5 of 5 | MET (5/5) | Every result and the selected item cost at most the parsed `$30.00` limit in every try; one result cost exactly `$30.00`. |
 
 **Diagnoses**
 
+No criterion missed its filed target in these 25 tries, so there is no failed
+tool, loop branch, session handoff, or model output to diagnose. Four matching
+scenarios repeated the same query and selected `lst_002` each time. These
+results do not show how the agent performs across other listings or platforms.
 
+Criterion 4 is the target I would tighten in a future test: 4 of 5 permits one
+card to omit a price or platform that a shopper needs. I would require 5 of 5
+across several selected listings and platforms. I have not changed this unit's
+original criterion or rescored the before run.
 
 ---
 
