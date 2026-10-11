@@ -128,7 +128,7 @@ def write_report(rows, args):
         f"# Run log{f' — {args.label}' if args.label else ''}",
         "",
         "- Produced by: `run_eval.py::main`",
-        "- Loop: `agent.py::run_agent` · tools: `tools.py`",
+        "- Loop: `agent.py::run_agent` · search: `mcp_server.py` · other tools: `tools.py`",
         f"- Tries per scenario: {n}, caching off",
         f"- Temperature: {config.TEMPERATURE}",
         f"- When: {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}",
@@ -186,11 +186,17 @@ def write_report(rows, args):
 
             session = record["session"] or {}
             item = session.get("selected_item") or {}
+            results = session.get("search_results") or []
+            first_result = results[0] if results else {}
             lines += [
                 f"- stopped early: {'yes — ' + str(session.get('error')) if session.get('error') else 'no'}",
                 f"- selected_item: {item.get('title', '(none)')}"
                 + (f" (${item.get('price')}, {item.get('platform')})" if item else ""),
-                f"- search_results: {len(session.get('search_results') or [])}",
+                f"- search_results: {len(results)}",
+                f"- first_search_result_id: {first_result.get('id')!r}",
+                f"- selected_item_id: {item.get('id')!r}",
+                f"- parsed_max_price: {session.get('parsed', {}).get('max_price')!r}",
+                f"- search_result_id_prices: {[(result.get('id'), result.get('price')) for result in results]!r}",
                 "",
             ]
             if session.get("outfit_suggestion"):

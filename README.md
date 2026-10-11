@@ -324,17 +324,76 @@ Forgot the remembered wardrobe. Future asks will use the example wardrobe.
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Selected listing reaches the outfit tool unchanged | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card includes the shopper facts | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Search respects the maximum price | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+I ran the five scenarios in `scenarios.py` with
+`.venv/bin/python run_eval.py --label before`. Caching was off. The run made
+40 model calls, and the returned fit cards varied between tries. The complete
+output for all 25 tries is in
+[`results/run_2026-10-11_0032_before.md`](results/run_2026-10-11_0032_before.md).
+The excerpts below come from `run_eval.py::run_once`, which calls
+`agent.py::run_agent` and records its session and trace.
+
+**Criterion 1, try 1.** The trace shows the search, outfit, and fit-card calls;
+the session contains a fit card.
 
 ```
+- stopped early: no
+- selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+- search_results: 10
+Fit card:
+Channel serious early 2000s energy with this dreamy butterfly-printed crop, perfect for serving nostalgic streetwear or edgy contrast looks. Snag this nostalgic piece for just $18.00 and start styling your dream aesthetic today. You can find this exact top listed right now on depop!
+[2] search_listings (via MCP)
+[5] suggest_outfit
+[6] create_fit_card
+```
 
+**Criterion 2, try 1.** The empty result ends the trace before
+`suggest_outfit`.
+
+```
+- stopped early: yes — No listings matched. Try broader keywords, a different size, or a higher price limit.
+- search_results: 0
+[2] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+[3] search_results branch
+      in:  0 matches
+      out: No listings matched. Try broader keywords, a different size, or a higher price limit.
+      →    stop
+```
+
+**Criterion 3, try 1.** The first search result, selected item, and outfit
+tool input all carry the same ID.
+
+```
+- first_search_result_id: 'lst_002'
+- selected_item_id: 'lst_002'
+[5] suggest_outfit
+      in:  new_item_id=lst_002, wardrobe_items=10, first_item='Baggy straight-leg jeans, dark wash'
+```
+
+**Criterion 4, try 1.** The selected listing is from `depop` at `$18.00`;
+the returned card has three sentences and includes both facts.
+
+```
+- selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+Fit card:
+Channel peak nostalgic energy with this dreamy butterfly-printed crop that effortlessly bridges casual streetwear and soft pastel whimsy. Style it with baggy denim and chunky sneakers for the ultimate low-effort, high-impact fit. Snag this Y2K Baby Tee — Butterfly Print right now for $18.00 exclusively over on depop!
+```
+
+**Criterion 5, try 1.** The report lists every returned price, including one
+at the inclusive `$30.00` limit.
+
+```
+- first_search_result_id: 'lst_002'
+- selected_item_id: 'lst_002'
+- parsed_max_price: 30.0
+- search_result_id_prices: [('lst_002', 18.0), ('lst_006', 24.0), ('lst_033', 19.0), ('lst_015', 26.0), ('lst_017', 15.0), ('lst_003', 22.0), ('lst_011', 27.0), ('lst_012', 20.0), ('lst_013', 30.0), ('lst_014', 12.0)]
 ```
 
 ---
