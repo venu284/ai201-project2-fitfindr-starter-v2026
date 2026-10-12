@@ -1,7 +1,7 @@
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import agent
 import trace
@@ -43,9 +43,13 @@ class AgentFailureAndTraceTests(unittest.TestCase):
         self.assertIsNone(session["fit_card"])
 
     def test_trace_shows_mcp_and_every_called_tool_in_order(self):
+        comparison = {"status": "below_median", "message": "below median"}
         with (
-            patch.object(agent, "call_tool", return_value=load_listings()[:2]),
-            patch.object(agent, "compare_price", return_value={"status": "below_median", "message": "below median"}),
+            patch.object(
+                agent,
+                "call_tool",
+                side_effect=(load_listings()[:2], comparison),
+            ) as mcp,
             patch.object(agent, "suggest_outfit", return_value="saved outfit"),
             patch.object(agent, "create_fit_card", return_value="saved card"),
             redirect_stdout(StringIO()),
@@ -56,11 +60,28 @@ class AgentFailureAndTraceTests(unittest.TestCase):
 
         self.assertIn("description='vintage jeans'", output)
         self.assertIn("max_price=40.0", output)
-        self.assertLess(output.index("search_listings (via MCP)"), output.index("compare_price"))
-        self.assertLess(output.index("compare_price"), output.index("suggest_outfit"))
+        self.assertLess(
+            output.index("search_listings (via MCP)"),
+            output.index("compare_price (via MCP)"),
+        )
+        self.assertLess(output.index("compare_price (via MCP)"), output.index("suggest_outfit"))
         self.assertLess(output.index("suggest_outfit"), output.index("create_fit_card"))
         self.assertIn(self.wardrobe["items"][0]["name"], output)
         self.assertIn("saved card", output)
+        self.assertEqual(
+            [
+                call(
+                    "search_listings",
+                    {
+                        "description": "vintage jeans",
+                        "size": None,
+                        "max_price": 40.0,
+                    },
+                ),
+                call("compare_price", {"new_item": load_listings()[0]}),
+            ],
+            mcp.call_args_list,
+        )
 
     def test_trace_does_not_print_without_opt_in(self):
         with (

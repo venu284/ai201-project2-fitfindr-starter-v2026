@@ -42,8 +42,9 @@
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
 FitFindr takes a plain-language thrift request, including keywords, size, and
-maximum price, and searches a local listings dataset. If nothing matches, it
-stops and tells the user to broaden the keywords, try another size, or raise the
+maximum price, and searches a local listings dataset. If a sized search finds
+nothing, it retries once without the size filter and tells the user what it
+dropped. If the search is still empty, it suggests broader keywords or a higher
 price limit. Otherwise it keeps the first listing, combines it with the user's
 wardrobe (or gives general advice if the wardrobe is empty), and writes a short
 fit-card caption. The stretch features below add a price check and a remembered
@@ -59,6 +60,15 @@ FitFindr adds all three optional stretch features:
   and skips it with a clear note when exactly one listing matches.
 - Style memory lets the CLI import a wardrobe once and reuse it in later
   runs until the user forgets it.
+
+The Unit 4 extras extend that work in three measured steps:
+
+- Register `compare_price` as a second MCP tool and route the agent's price
+  comparison through MCP.
+- When a search returns no listings and included a size, retry once without
+  the size and tell the user that the retry dropped the size filter.
+- Extract `parse_query` as a second measured improvement so tests can call the
+  parser directly.
 
 ---
 
@@ -117,13 +127,32 @@ FitFindr adds all three optional stretch features:
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rules:** If `search_listings` returns an empty list, store a message in `session["error"]` telling the user to try broader keywords, a different size, or a higher price limit, then stop. Otherwise, store the first result in `session["selected_item"]`. If exactly one listing matched, skip `compare_price` and record why. If several listings matched, call `compare_price` with the selected item. Both matching paths then call `suggest_outfit` and `create_fit_card`.
+**Branch rules:** If `search_listings` returns an empty list and the query has a
+size, retry once through MCP with the same description and maximum price but no
+size filter. Store what changed in `session["search_relaxation"]`. If the retry
+is also empty, store an actionable message in `session["error"]` and stop before
+the model tools. An empty search with no size stops without a retry. Otherwise,
+store the first result in `session["selected_item"]`. If exactly one listing
+matched, skip `compare_price` and record why. If several listings matched, call
+`compare_price` through MCP with the selected item. Both matching paths then
+call `suggest_outfit` and `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** `agent.py::run_agent` uses regular expressions. It recognizes `size <value>` as the size and `under`, `below`, or `less than` followed by a dollar amount as the maximum price. It removes those parts from the query and uses the remaining text as the description.
+**How the query is parsed:** `agent.py::parse_query` uses shared compiled regular
+expressions. It recognizes `size <value>` as the size and `under`, `below`, or
+`less than` followed by a dollar amount as the maximum price. It removes those
+parts from the query and uses the remaining text as the description.
 
-**What moves through the session:** The session stores the original `query`, then the parsed `description`, `size`, and `max_price`. `search_listings` stores its results in `search_results`. The first result moves to `selected_item`. The match-count branch stores either the fourth tool's return value or the skip reason in `price_comparison`. The selected item then passes to `suggest_outfit` with the saved `wardrobe`. The returned string moves to `outfit_suggestion`, then `outfit_suggestion` and `selected_item` pass to `create_fit_card`, whose result is stored in `fit_card`.
+**What moves through the session:** The session stores the original `query`, then
+the parsed `description`, `size`, and `max_price`. `search_listings` stores its
+results in `search_results`. A relaxed retry also stores its explanation in
+`search_relaxation`. The first result moves to `selected_item`. The match-count
+branch stores either the fourth tool's return value or the skip reason in
+`price_comparison`. The selected item then passes to `suggest_outfit` with the
+saved `wardrobe`. The returned string moves to `outfit_suggestion`, then
+`outfit_suggestion` and `selected_item` pass to `create_fit_card`, whose result
+is stored in `fit_card`.
 
 ---
 
@@ -317,6 +346,18 @@ Forgot the remembered wardrobe. Future asks will use the example wardrobe.
   `create_fit_card` contract check, ran the same 25 tries with the rate limiter
   unchanged, and reported that every score stayed at 5 of 5.
 
+**Moment 4 — Unit 4 stretch review**
+
+- *What I asked for:* I asked two independent AI reviews to check the second
+  MCP move, the size-relaxation branch, and the parser refactor against the
+  published tool contracts and tests.
+- *What came back:* The reviews found gaps in the `compare_price` MCP contract
+  documentation and in retry tests for the exhausted and successful paths.
+- *What I changed:* I documented `compare_price` inputs, result fields, and
+  `unavailable` behavior; added direct-versus-MCP parity tests; and added tests
+  for one retry, exhausted retries, the displayed retry message, and parser
+  cases.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
@@ -463,7 +504,11 @@ original criterion or rescored the before run.
      the same length, your branch isn't working — and this is the fastest way
      anyone will ever find that out. -->
 
-**Happy path**
+The traces in this section are the required Milestone 2 evidence captured before
+the optional stretch work. The current two-MCP-tool and retry traces appear in
+the [Unit 4 stretch evidence](#unit-4-stretch-evidence) section.
+
+**Historical happy path**
 
 ```
 $ .venv/bin/python app.py ask 'vintage graphic tee under $30' --trace
@@ -491,7 +536,7 @@ The full query returned the selected listing, price comparison, outfit, and
 fit card. Its two model responses came from the build cache; the MCP search
 and loop still ran for this query.
 
-**Empty search**
+**Historical empty search**
 
 ```
 $ .venv/bin/python app.py ask 'designer ballgown size XXS under $5' --trace
@@ -511,8 +556,9 @@ $ .venv/bin/python app.py ask 'designer ballgown size XXS under $5' --trace
 
 **Failure checks**
 
-The empty-search message above names the missing listings and three constraints
-the user can change. No model tool ran.
+In this pre-stretch run, the empty-search message named three constraints the
+user could change and no model tool ran. The current sized-search behavior
+retries once without size, as shown in the stretch evidence below.
 
 With `--empty-wardrobe`, the CLI said `(running with an empty wardrobe)` and
 `suggest_outfit` returned general advice rather than stopping. An excerpt of
@@ -543,12 +589,13 @@ not called. A matching handler covers a model failure during fit-card creation.
 **On the MCP move:** `search_listings` is registered in `mcp_server.py` with
 `description: str`, optional `size: str`, and optional `max_price: float` in
 dollars. `agent.py::run_agent` calls it through `mcp_client.call_tool`; the
-other tools remain direct Python calls. `python mcp_client.py` listed exactly
-this tool and its input schema. A direct-versus-MCP check returned equal lists
-for both a matching query and an empty search. Behavior did not change after
-the move: a normal `app.py ask` query still returned the Y2K Baby Tee, the
-price comparison, an outfit suggestion, and a fit card. That full run used
-cached model responses.
+same route now calls `compare_price`. Both deterministic tools use MCP;
+`suggest_outfit` and `create_fit_card` remain direct model calls. `python
+mcp_client.py` listed the registered tools and their input schemas. A
+direct-versus-MCP check returned equal search lists for a matching query and an
+empty search. Behavior did not change after the move: a normal `app.py ask`
+query still returned the Y2K Baby Tee, the price comparison, an outfit
+suggestion, and a fit card. That full run used cached model responses.
 
 
 ---
@@ -604,6 +651,108 @@ the run. The complete output is in
 ```
 Channel peak early 2000s energy with this dreamy butterfly graphic tee, styled effortlessly for casual vintage coffee runs or nostalgic streetwear nights. Snag the Y2K Baby Tee — Butterfly Print for $18.00 and lock down your ultimate retro aesthetic. Grab it now exclusively on depop!
 ```
+
+
+## Unit 4 stretch evidence
+
+### Second MCP move
+
+`agent.py::run_agent` calls both `search_listings` and `compare_price` through
+`mcp_client.call_tool`. The model tools, `suggest_outfit` and `create_fit_card`,
+remain direct calls. `mcp_server.py::compare_price` advertises one required
+`new_item` object. Its description says that `id` excludes the selected
+listing, and `category` plus numeric `price` enable comparison. It names the
+stable result fields and `status="unavailable"` when it cannot compare a
+listing.
+
+`tests/test_mcp_search.py` compares direct and MCP `compare_price` results for
+both a normal listing and an unavailable listing. It also inspects MCP tool
+discovery. The route changes, but those results do not: the parity tests pass.
+
+### Size-relaxation retry
+
+The loop retries only when the first MCP `search_listings` call returns an
+empty list and the parsed query has a size. It retries exactly once with
+`size=None`; the description and maximum price stay unchanged. If that retry
+finds listings, the query continues. This real successful-retry trace came
+from `.venv/bin/python app.py ask 'argyle size S under $30' --trace`:
+
+```
+[2] search_listings (via MCP)
+      in:  description='argyle', size='S', max_price=30.0
+      out: [] (empty)
+[3] search_listings retry (via MCP)
+      in:  description='argyle', size=None, max_price=30.0
+      out: 1 items: Vintage Knit Vest — Argyle Brown/Cream
+      →    dropped size filter
+[4] search relaxation
+      out: No listings matched size S, so FitFindr retried without the size filter.
+[5] select_item
+      out: id=lst_030, title=Vintage Knit Vest — Argyle Brown/Cream
+[6] compare_price (skipped)
+      out: Only one listing matched, so FitFindr skipped price comparison.
+[7] suggest_outfit
+      in:  new_item_id=lst_030, wardrobe_items=10
+[8] create_fit_card
+      in:  new_item_id=lst_030, outfit=**Outfit Idea 1: Dark Academia Preppy** …
+
+  No listings matched size S, so FitFindr retried without the size filter.
+  Found:    Vintage Knit Vest — Argyle Brown/Cream — $25.0 on thredUp
+```
+
+The CLI prints the retry notice before `Found:`. The first run had no cached
+responses for this query and made 2 model calls.
+
+If the retry is also empty, the user sees: `No listings matched after FitFindr
+dropped the size filter for XXS. Try broader keywords or a higher price limit.`
+The new evaluation reports show the exhausted branch:
+
+```
+[3] search_listings retry (via MCP)
+      in:  description='designer ballgown', size=None, max_price=5.0
+      out: [] (empty)
+      →    dropped size filter
+[4] search relaxation
+      out: No listings matched size XXS, so FitFindr retried without the size filter.
+[5] search_results branch
+      in:  0 matches after retry
+      out: No listings matched after FitFindr dropped the size filter for XXS. Try broader keywords or a higher price lim…
+      →    stop
+```
+
+### Second improvement: query parsing
+
+Earlier feedback identified duplicated inline regular expressions in
+`run_agent` and no way to test parsing directly. `agent.py::parse_query` now
+uses compiled shared `SIZE_PATTERN` and `PRICE_PATTERN` values to extract size
+and maximum price, then removes the matched constraints to produce the
+description. `tests/test_query_parsing.py` calls the public helper directly for
+sizes, all supported price phrases, mixed constraints, case, and decimals.
+
+### Stretch evaluations
+
+Both evaluations ran 25 tries with caching off. I scored every result against
+the unchanged criteria. For criterion 4, each of the five cards in each report
+is nonempty, has two or three sentences, includes `depop` without regard to
+case, and includes `$18.00`. For criterion 5, every listed price, including
+the selected item, is at most the parsed `$30.00` limit.
+
+| Criterion | Target | Stretch before improvement | Stretch after improvement |
+|---|---|---|---|
+| 1. Matching query completes all three tools | 4 of 5 | PASS, PASS, PASS, PASS, PASS — MET (5/5) | PASS, PASS, PASS, PASS, PASS — MET (5/5) |
+| 2. Impossible query stops before the second tool | 5 of 5 | PASS, PASS, PASS, PASS, PASS — MET (5/5) | PASS, PASS, PASS, PASS, PASS — MET (5/5) |
+| 3. Selected listing reaches the outfit tool unchanged | 5 of 5 | PASS, PASS, PASS, PASS, PASS — MET (5/5) | PASS, PASS, PASS, PASS, PASS — MET (5/5) |
+| 4. Fit card includes the shopper facts | 4 of 5 | PASS, PASS, PASS, PASS, PASS — MET (5/5) | PASS, PASS, PASS, PASS, PASS — MET (5/5) |
+| 5. Search respects the maximum price | 5 of 5 | PASS, PASS, PASS, PASS, PASS — MET (5/5) | PASS, PASS, PASS, PASS, PASS — MET (5/5) |
+
+The console reported 42 provider calls, including retries, for the
+[stretch-before-improvement report](results/run_2026-10-11_2040_stretch-before-improvement.md).
+The console reported 40 model calls for the
+[stretch-after-improvement report](results/run_2026-10-11_2048_stretch-after-improvement.md)
+run. The scores stayed identical, so the parse refactor did not improve this
+fixed evaluation rate. Its evidence is structural instead:
+direct parser tests cover the extracted helper, and MCP parity tests preserve
+the old deterministic behavior.
 
 
 

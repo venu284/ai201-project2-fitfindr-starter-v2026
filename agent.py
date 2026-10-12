@@ -18,11 +18,31 @@ import re
 import config
 import trace
 from mcp_client import call_tool
-from tools import compare_price, create_fit_card, suggest_outfit
+from tools import create_fit_card, suggest_outfit
 from generate import ModelUnavailable
 
 
+SIZE_PATTERN = re.compile(r"\bsize\s+([\w/-]+)", re.IGNORECASE)
+PRICE_PATTERN = re.compile(
+    r"\b(?:under|below|less than)\s*\$?(\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+
+
 # ── session state ─────────────────────────────────────────────────────────────
+
+def parse_query(query: str) -> dict:
+    size_match = SIZE_PATTERN.search(query)
+    price_match = PRICE_PATTERN.search(query)
+    description = SIZE_PATTERN.sub("", query)
+    description = PRICE_PATTERN.sub("", description).strip(" ,")
+
+    return {
+        "description": description,
+        "size": size_match.group(1) if size_match else None,
+        "max_price": float(price_match.group(1)) if price_match else None,
+    }
+
 
 def new_session(query: str, wardrobe: dict) -> dict:
     """
@@ -42,6 +62,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "query": query,              # what the user typed
         "parsed": {},                # description / size / max_price you pulled out of it
         "search_results": [],        # everything search_listings returned
+        "search_relaxation": None,   # why a sized search was retried without size
         "selected_item": None,       # the one you chose — goes into suggest_outfit
         "price_comparison": None,    # compare_price result, or why it was skipped
         "wardrobe": wardrobe,        # the user's wardrobe
@@ -84,8 +105,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
          Put the results in session["search_results"].
 
          ⚠️ THIS IS THE BRANCH. If nothing came back:
+              - when the query included a size, retry once without that filter
               - put a message in session["error"] saying what the user could
-                change — "No results" is not that message
+                change if the retry also finds nothing
               - return the session
               - do NOT call suggest_outfit with nothing
 
@@ -120,24 +142,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         iterations += 1
         trace.check_iterations(iterations)
 
-        size_match = re.search(r"\bsize\s+([\w/-]+)", query, re.IGNORECASE)
-        price_match = re.search(
-            r"\b(?:under|below|less than)\s*\$?(\d+(?:\.\d+)?)",
-            query,
-            re.IGNORECASE,
-        )
-        description = re.sub(r"\bsize\s+[\w/-]+", "", query, flags=re.IGNORECASE)
-        description = re.sub(
-            r"\b(?:under|below|less than)\s*\$?\d+(?:\.\d+)?",
-            "",
-            description,
-            flags=re.IGNORECASE,
-        ).strip(" ,")
-        session["parsed"] = {
-            "description": description,
-            "size": size_match.group(1) if size_match else None,
-            "max_price": float(price_match.group(1)) if price_match else None,
-        }
+        session["parsed"] = parse_query(query)
+        description = session["parsed"]["description"]
         search_inputs = (
             f"description={description!r}, size={session['parsed']['size']!r}, "
             f"max_price={session['parsed']['max_price']!r}"
@@ -151,12 +157,56 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             returned=session["search_results"],
         )
         if not session["search_results"]:
-            session["error"] = (
-                "No listings matched. Try broader keywords, a different size, "
-                "or a higher price limit."
+            original_size = session["parsed"]["size"]
+            if original_size is None:
+                session["error"] = (
+                    "No listings matched. Try broader keywords, a different size, "
+                    "or a higher price limit."
+                )
+                trace.step(
+                    "search_results branch",
+                    inputs="0 matches",
+                    returned=session["error"],
+                    note="stop",
+                )
+                return session
+
+            relaxed_search = {**session["parsed"], "size": None}
+            session["search_relaxation"] = (
+                f"No listings matched size {original_size}, so FitFindr "
+                "retried without the size filter."
             )
-            trace.step("search_results branch", inputs="0 matches", returned=session["error"], note="stop")
-            return session
+            relaxed_inputs = (
+                f"description={description!r}, size=None, "
+                f"max_price={session['parsed']['max_price']!r}"
+            )
+            session["search_results"] = call_tool(
+                "search_listings", relaxed_search
+            )
+            trace.step(
+                "search_listings retry (via MCP)",
+                inputs=relaxed_inputs,
+                returned=session["search_results"],
+                note="dropped size filter",
+            )
+            trace.step(
+                "search relaxation",
+                returned=session["search_relaxation"],
+            )
+
+            if not session["search_results"]:
+                session["error"] = (
+                    "No listings matched after FitFindr dropped the size filter "
+                    f"for {original_size}. Try broader keywords or a "
+                    "higher price limit."
+                )
+                trace.step(
+                    "search_results branch",
+                    inputs="0 matches after retry",
+                    returned=session["error"],
+                    note="stop",
+                )
+                return session
 
         session["selected_item"] = session["search_results"][0]
         trace.step(
@@ -182,9 +232,11 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                 returned=session["price_comparison"]["message"],
             )
         else:
-            session["price_comparison"] = compare_price(session["selected_item"])
+            session["price_comparison"] = call_tool(
+                "compare_price", {"new_item": session["selected_item"]}
+            )
             trace.step(
-                "compare_price",
+                "compare_price (via MCP)",
                 inputs=session["selected_item"],
                 returned=session["price_comparison"]["message"],
             )
@@ -238,6 +290,8 @@ def _show(session: dict) -> None:
         return
 
     item = session["selected_item"] or {}
+    if session.get("search_relaxation"):
+        print(f"  {session['search_relaxation']}")
     print(f"  found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
     comparison = session.get("price_comparison") or {}
     if comparison.get("message"):

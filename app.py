@@ -153,6 +153,8 @@ def _ask_one(query, wardrobe, use_trace):
         print(f"  {session['error']}")
     else:
         item = session["selected_item"] or {}
+        if session.get("search_relaxation"):
+            print(f"  {session['search_relaxation']}")
         print(
             f"  Found:    {item.get('title')} — ${item.get('price')} "
             f"on {item.get('platform')}"

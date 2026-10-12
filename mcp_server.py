@@ -6,17 +6,17 @@ them. MCP is an agreed shape you wrap a tool in so that anything speaking the
 same protocol can call it — your agent today, a different agent tomorrow,
 someone else's app after that.
 
-**You're moving one tool. Not three.** The point is to see the seam.
-`search_listings` is the one to move: it doesn't call the model, so nothing is
-slow and nothing changes between runs while you're learning the shape.
+The required milestone moves `search_listings` onto MCP. The optional stretch
+also moves `compare_price`, which gives the server a second deterministic tool
+without adding a model call.
 
     python mcp_server.py        starts the server (it will just sit there — that's right)
     python mcp_client.py        asks the server what it offers
 
 ─────────────────────────────────────────────────────────────────────────────
-TODO — register one tool.
+REGISTERED TOOLS — `search_listings` plus the optional `compare_price` stretch.
 
-Uncomment the block below and fill it in. Three things matter:
+Three things matter for each registration:
 
   1. **The name.** Exactly what your agent will ask for.
 
@@ -59,6 +59,7 @@ works with a direct call, and **a documented failure earns the point in full.**
 
 from mcp.server.fastmcp import FastMCP
 
+from tools import compare_price as _compare_price_impl
 from tools import search_listings as _search_listings_impl
 
 # log_level="WARNING" keeps the server from printing an INFO line for every
@@ -76,15 +77,19 @@ def search_listings(
     """Search listings by description keywords, optional item size, and an inclusive maximum price in dollars; return ranked listing dictionaries or [] when none match."""
     return _search_listings_impl(description, size, max_price)
 
+
+@mcp.tool()
+def compare_price(new_item: dict) -> dict:
+    """Accept new_item, a listing dictionary whose id excludes that listing from comparables and whose category plus numeric price enable comparison; return a stable dictionary with status, category, item_price, median_price, difference, comparable_count, and message, using status unavailable when comparison cannot be made."""
+    return _compare_price_impl(new_item)
+
 # ──────────────────────────────────────────────────────────────────────────────
 #
-# Two notes on the block above.
+# Two notes on the registrations above.
 #
-# The registered name is the *function* name — so the block above registers
-# "search_listings", which is exactly what call_tool("search_listings", ...)
-# asks for. That is also why the import at the top of this file brings the real
-# implementation in under an alias: without it, the registered function and the
-# one it calls would be the same name, and the tool would call itself.
+# Each registered name is the *function* name, which is exactly what call_tool()
+# asks for. The imports at the top bring the real implementations in under
+# aliases. Otherwise, each registered function would call itself.
 #
 # FastMCP builds the input schema from your type hints, which is why the hints
 # are not optional here. `description: str` becomes a required string;
