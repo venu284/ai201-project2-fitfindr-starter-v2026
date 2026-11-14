@@ -27,15 +27,20 @@ web server has to be. The reason is worth reading before you deploy: see the
 note above `_one_at_a_time` below — it also decides which gunicorn worker you
 can use.
 
-⚠️ There is deliberately NO logging, NO timing and NO request counting in this
-file. That is unit 9's follow-along: you instrument this yourself, first, and
-then deploy it. A structured log you were handed teaches you nothing about
-what belongs in one — and the timing field is the one everybody skips.
+Instrumentation (capstone): every /ask request writes one record to
+logs/requests.jsonl through `runlog.py`, including rejected (400) and crashed
+(500) requests. A record holds what came in, what came out, the status, the
+end-to-end time split into lock wait and agent run, time per agent stage, and
+the model calls, tokens, cache hits and rate-limiter waiting that request
+caused. Send an `X-Run-Label` header to tag requests that belong to one test
+run.
 """
 
 import os
 import sys
 import threading
+import time
+import uuid
 
 # config first, and before anything that talks to the model: it loads your .env
 # and fixes the Windows console encoding for every module that imports it.
@@ -43,6 +48,8 @@ import config  # noqa: F401
 
 from flask import Flask, jsonify, request
 
+import generate
+import runlog
 from agent import run_agent
 from utils.data_loader import get_example_wardrobe
 
@@ -107,12 +114,45 @@ def ask():
                                                 example wardrobe the CLI uses.
     Out:  the session dict from run_agent(), as JSON.
     """
-    payload = request.get_json(silent=True) or {}
-    query = (payload.get("query") or "").strip()
+    received = time.perf_counter()
+    record = {
+        "timestamp": runlog.now_iso(),
+        "request_id": uuid.uuid4().hex[:12],
+        "run_label": request.headers.get("X-Run-Label"),
+        "route": "/ask",
+        "query": None,
+        "status": None,
+        "outcome": None,
+        "error": None,
+        "selected_item_id": None,
+        "result_count": None,
+        "fit_card": None,
+        "total_ms": None,
+        "queue_wait_ms": None,
+        "run_ms": None,
+        "stage_ms": {},
+        "model_calls": 0,
+        "cache_hits": 0,
+        "prompt_tokens": 0,
+        "output_tokens": 0,
+        "rate_limit_wait_s": 0.0,
+        "model": config.MODEL,
+        "cache_enabled": config.CACHE_ENABLED,
+    }
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    raw_query = payload.get("query")
+    query = raw_query.strip() if isinstance(raw_query, str) else ""
+    record["query"] = raw_query if raw_query is None or isinstance(raw_query, str) else repr(raw_query)
     if not query:
         # 400 rather than a stack trace: the caller can act on this one.
-        return jsonify({"error": "Send JSON with a 'query' field, e.g. "
-                                 '{"query": "vintage graphic tee under $30"}'}), 400
+        message = ("Send JSON with a 'query' field, e.g. "
+                   '{"query": "vintage graphic tee under $30"}')
+        record.update(status=400, outcome="bad_request", error=message)
+        _finish(record, received)
+        return jsonify({"error": message}), 400
 
     wardrobe = payload.get("wardrobe")
     if not isinstance(wardrobe, dict):
@@ -138,18 +178,70 @@ def ask():
 
     failure = None
     session = None
+    wait_start = time.perf_counter()
     with _one_at_a_time:
+        run_start = time.perf_counter()
+        record["queue_wait_ms"] = _ms(run_start - wait_start)
+        before = generate.counters()
         try:
             session = run_agent(query, wardrobe)
         except Exception as exc:  # noqa: BLE001 — a 500 with a sentence beats a hang
             failure = f"{type(exc).__name__}: {exc}"
+        finally:
+            # Still inside the lock, so no other request has touched the
+            # counters between these two snapshots.
+            record["run_ms"] = _ms(time.perf_counter() - run_start)
+            after = generate.counters()
+            for key in ("model_calls", "cache_hits", "prompt_tokens", "output_tokens"):
+                record[key] = after[key] - before[key]
+            record["rate_limit_wait_s"] = round(
+                after["rate_limit_wait_s"] - before["rate_limit_wait_s"], 2
+            )
 
     # Outside the lock: building a response is not work the next caller should
     # be waiting on.
     if failure is not None:
+        record.update(status=500, outcome="server_error", error=failure)
+        _finish(record, received)
         return jsonify({"error": failure}), 500
 
+    selected = session.get("selected_item") or {}
+    record.update(
+        status=200,
+        outcome=_outcome(session),
+        error=session.get("error"),
+        selected_item_id=selected.get("id"),
+        result_count=len(session.get("search_results") or []),
+        fit_card=session.get("fit_card"),
+        stage_ms=session.get("stage_ms") or {},
+    )
+    _finish(record, received)
     return jsonify(session)
+
+
+def _ms(seconds: float) -> float:
+    return round(seconds * 1000, 1)
+
+
+def _outcome(session: dict) -> str:
+    """One word for how an agent run ended, so the log can be counted by it."""
+    if session.get("fit_card"):
+        return "fit_card"
+    error = session.get("error") or ""
+    if "model couldn't be reached" in error:
+        return "model_error"
+    if error:
+        return "no_results"
+    return "no_fit_card"
+
+
+def _finish(record: dict, received: float) -> None:
+    """Stamp the end-to-end time and write the record. Logging never breaks a reply."""
+    record["total_ms"] = _ms(time.perf_counter() - received)
+    try:
+        runlog.write_record(record)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [serve] could not write the request log: {exc}", file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":
