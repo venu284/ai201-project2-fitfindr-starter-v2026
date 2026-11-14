@@ -817,3 +817,51 @@ Repository URL, unchanged from the previous unit:
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+---
+
+## Capstone
+
+Unit 9. Everything above this heading is the Unit 3 and Unit 4 submission and
+is left as it was. Every section for this unit is below.
+
+**What This Extends**
+
+This extends FitFindr, my Unit 3/4 thrift-shopping agent. Before this unit,
+FitFindr only ran as a command (`python app.py ask ...`) or through a bare
+`serve.py` with no record of what it did. What's new is an operational layer
+around the HTTP service:
+
+- every `/ask` request, including the ones that fail, writes one structured
+  JSON line to `logs/requests.jsonl`
+- each record carries end-to-end latency, how long the request waited for the
+  one-at-a-time lock, time spent in each agent stage, model calls, tokens, cache
+  hits, and time spent waiting on the rate limiter
+- a single documented `gunicorn` command that starts the service outside my
+  editor
+- a request driver that replays a fixed set of queries against the running
+  service, so cost and latency come from measured runs
+
+The agent's tools, planning loop and prompts don't change.
+
+**The Shape**
+
+Shape A, deploy and instrument. The extension is the run path, the structured
+log, and the numbers that come out of it: latency, per-stage time, tokens per
+run, and what happens when requests fail or overlap.
+
+Out of scope:
+
+- I am not adding a browser front end. The service stays JSON over HTTP.
+- I am not changing the tools, the planning loop, the prompts or the listings
+  data. Anything I find wrong with them goes in What's Still Broken, unless it
+  is the one improvement.
+- I am not hosting it. I chose Path B (local with logs), so there is no cloud
+  account, container or host config.
+- I am not adding concurrency. `serve.py` keeps running one agent at a time,
+  because MCP starts a subprocess per call and `generate.py`'s rate limiter is
+  process-global.
+
+Stretch, declared before building: **a latency breakdown**, meaning measured
+time per stage (parse, MCP search, MCP price comparison, `suggest_outfit`,
+`create_fit_card`) for each run.
