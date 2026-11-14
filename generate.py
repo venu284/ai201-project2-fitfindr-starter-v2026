@@ -41,6 +41,7 @@ _session_calls = 0
 _cache_hits = 0
 _prompt_tokens = 0
 _output_tokens = 0
+_wait_seconds = 0.0
 _client = None
 _budget_warned = False
 
@@ -118,8 +119,33 @@ def _wait_for_slot() -> None:
                 file=sys.stderr,
                 flush=True,
             )
+        _add_wait(sleep_for)
         time.sleep(sleep_for)
         _call_times[:] = [t for t in _call_times if time.monotonic() - t < 60.0]
+
+
+def _add_wait(seconds: float) -> None:
+    """Count time spent sleeping for the rate limiter, so a log can show it."""
+    global _wait_seconds
+    _wait_seconds += seconds
+
+
+def counters() -> dict:
+    """
+    A snapshot of this process's running totals.
+
+    serve.py takes one before and one after each agent run and logs the
+    difference: per-request model calls, cache hits, tokens, and time spent
+    waiting on the rate limiter. The subtraction is only correct because
+    serve.py runs one agent at a time in one process.
+    """
+    return {
+        "model_calls": _session_calls,
+        "cache_hits": _cache_hits,
+        "prompt_tokens": _prompt_tokens,
+        "output_tokens": _output_tokens,
+        "rate_limit_wait_s": _wait_seconds,
+    }
 
 
 def _check_budget() -> None:
@@ -338,6 +364,7 @@ def generate(
                 file=sys.stderr,
                 flush=True,
             )
+            _add_wait(backoff)
             time.sleep(backoff)
 
     raise RuntimeError(

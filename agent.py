@@ -14,6 +14,7 @@ Build and test your three tools in `tools.py` first. Then come here.
 """
 
 import re
+import time
 
 import config
 import trace
@@ -69,7 +70,26 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
         "error": None,               # set when the run ended early
+        "stage_ms": {},              # capstone: milliseconds spent in each stage
     }
+
+
+def _timed(session: dict, stage: str, fn, *args):
+    """
+    Run one stage and add its wall-clock time to session["stage_ms"].
+
+    The time is recorded in `finally`, so a stage that raises still shows how
+    long it ran before failing. A stage that runs twice (the search retry)
+    adds to its own key rather than overwriting it.
+    """
+    start = time.perf_counter()
+    try:
+        return fn(*args)
+    finally:
+        elapsed = round((time.perf_counter() - start) * 1000, 1)
+        session["stage_ms"][stage] = round(
+            session["stage_ms"].get(stage, 0.0) + elapsed, 1
+        )
 
 
 # ── planning loop ─────────────────────────────────────────────────────────────
@@ -142,7 +162,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         iterations += 1
         trace.check_iterations(iterations)
 
-        session["parsed"] = parse_query(query)
+        session["parsed"] = _timed(session, "parse", parse_query, query)
         description = session["parsed"]["description"]
         search_inputs = (
             f"description={description!r}, size={session['parsed']['size']!r}, "
@@ -150,7 +170,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         )
         trace.step("parse_query", inputs=query, returned=search_inputs)
 
-        session["search_results"] = call_tool("search_listings", session["parsed"])
+        session["search_results"] = _timed(
+            session, "search", call_tool, "search_listings", session["parsed"]
+        )
         trace.step(
             "search_listings (via MCP)",
             inputs=search_inputs,
@@ -180,8 +202,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                 f"description={description!r}, size=None, "
                 f"max_price={session['parsed']['max_price']!r}"
             )
-            session["search_results"] = call_tool(
-                "search_listings", relaxed_search
+            session["search_results"] = _timed(
+                session, "search_retry", call_tool, "search_listings", relaxed_search
             )
             trace.step(
                 "search_listings retry (via MCP)",
@@ -232,8 +254,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                 returned=session["price_comparison"]["message"],
             )
         else:
-            session["price_comparison"] = call_tool(
-                "compare_price", {"new_item": session["selected_item"]}
+            session["price_comparison"] = _timed(
+                session, "compare_price", call_tool,
+                "compare_price", {"new_item": session["selected_item"]},
             )
             trace.step(
                 "compare_price (via MCP)",
@@ -248,8 +271,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             f"wardrobe_items={len(wardrobe_items)}, first_item={first_wardrobe_item!r}"
         )
         try:
-            session["outfit_suggestion"] = suggest_outfit(
-                session["selected_item"], session["wardrobe"]
+            session["outfit_suggestion"] = _timed(
+                session, "suggest_outfit", suggest_outfit,
+                session["selected_item"], session["wardrobe"],
             )
         except ModelUnavailable:
             session["error"] = (
@@ -267,8 +291,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             f"outfit={session['outfit_suggestion']}"
         )
         try:
-            session["fit_card"] = create_fit_card(
-                session["outfit_suggestion"], session["selected_item"]
+            session["fit_card"] = _timed(
+                session, "create_fit_card", create_fit_card,
+                session["outfit_suggestion"], session["selected_item"],
             )
         except ModelUnavailable:
             session["error"] = (
