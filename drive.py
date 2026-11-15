@@ -154,6 +154,9 @@ def main() -> int:
     parser.add_argument("--repeat", type=int, default=1, help="passes through the set")
     parser.add_argument("--parallel", type=int, default=1, help="requests in flight at once")
     parser.add_argument("--timeout", type=float, default=300.0, help="caller timeout, seconds")
+    parser.add_argument("--delay", type=float, default=0.0,
+                        help="seconds to wait before sending each request after the first "
+                             "(sequential runs only)")
     parser.add_argument("--label", default=datetime.now().strftime("run_%Y-%m-%d_%H%M%S"))
     parser.add_argument("--log", type=Path, default=runlog.LOG_PATH,
                         help="the service's log file, to join against")
@@ -164,7 +167,13 @@ def main() -> int:
           f"{args.parallel} at a time) to {args.url} as '{args.label}'")
 
     with ThreadPoolExecutor(max_workers=args.parallel) as pool:
-        futures = [pool.submit(send, args.url, b, args.label, args.timeout) for b in bodies]
+        futures = []
+        for i, b in enumerate(bodies):
+            if i and args.delay and args.parallel == 1:
+                # Sequential pacing: wait for the previous request, then pause.
+                futures[-1].result()
+                time.sleep(args.delay)
+            futures.append(pool.submit(send, args.url, b, args.label, args.timeout))
         rows = []
         for i, fut in enumerate(futures, 1):
             row = fut.result()
@@ -180,7 +189,7 @@ def main() -> int:
         f"# Drive run `{args.label}`",
         "",
         f"`python drive.py --set {args.set} --repeat {args.repeat} --parallel {args.parallel} "
-        f"--label {args.label}` against {args.url}, finished {runlog.now_iso()}.",
+        f"--delay {args.delay} --label {args.label}` against {args.url}, finished {runlog.now_iso()}.",
         "",
         "## Summary",
         "",

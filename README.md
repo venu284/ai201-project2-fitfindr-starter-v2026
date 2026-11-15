@@ -865,3 +865,127 @@ Out of scope:
 Stretch, declared before building: **a latency breakdown**, meaning measured
 time per stage (parse, MCP search, MCP price comparison, `suggest_outfit`,
 `create_fit_card`) for each run.
+
+**Running It**
+
+Path B, local with logs. The service runs on my machine under gunicorn, started
+by one command:
+
+```bash
+AI201_CACHE=0 gunicorn -w 1 -b 127.0.0.1:8000 serve:app
+```
+
+The environment it needs, the setup from a clean checkout, how to check it and
+how to replay the fixed query sets are all in the Capstone section of
+[RUNNING.md](RUNNING.md). I tested those instructions by cloning this repository
+into an empty folder, creating a fresh virtual environment, and following them
+exactly: the service started, `/health` answered, a real `/ask` returned a fit
+card for `lst_007`, and the request appeared in `logs/requests.jsonl`. The run
+record is committed in [logs/requests.jsonl](logs/requests.jsonl), and each
+driver run writes a report to `results/drive_<label>.md`.
+
+**Instrumentation**
+
+`serve.py::ask` writes one JSON object per request to `logs/requests.jsonl`
+through `runlog.py::write_record`, on every path: a successful fit card, an
+empty search, a model error, a rejected body (400) and a crash (500). Each
+record holds:
+
+- **when and which**: `timestamp` (UTC, milliseconds), `request_id` (also sent
+  back in the `X-Request-Id` header), `run_label` (from the `X-Run-Label`
+  header, so one test run's requests can be pulled out)
+- **what came in**: `query`
+- **what came out**: `status`, `outcome` (`fit_card`, `no_results`,
+  `model_error`, `bad_request`, `server_error`), `error`, `selected_item_id`,
+  `result_count`, `fit_card`
+- **how long it took**: `total_ms` end to end in the service, split into
+  `queue_wait_ms` (waiting for another request to finish) and `run_ms` (inside
+  `run_agent`), plus `stage_ms` per agent stage (`parse`, `search`,
+  `search_retry`, `compare_price`, `suggest_outfit`, `create_fit_card`), timed
+  by `agent.py::_timed`
+- **what it used**: `model_calls`, `cache_hits`, `prompt_tokens`,
+  `output_tokens` and `rate_limit_wait_s`, taken as the difference of
+  `generate.py::counters()` before and after the run
+- **configuration**: `model`, `cache_enabled`
+
+Fourteen entries from the M3 session on 2026-11-14 (local time, the log is in
+UTC): ten paced fit-card runs (`python drive.py --set matching --repeat 2
+--delay 6 --label m3-cost-paced`), two rejected bodies (`--set bad`) and two
+empty searches (`--set no_match`):
+
+```json
+{"timestamp": "2026-11-15T00:09:13.980+00:00", "request_id": "b70f4927ad6b", "run_label": "m3-cost-paced", "route": "/ask", "query": "vintage graphic tee under $30", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_002", "result_count": 10, "fit_card": "Channel nostalgic early 2000s energy by pairing this butterfly baby tee with baggy dark-wash denim and chunky white sneakers for the ultimate casual street look. You can also throw on an edgy black denim jacket and combat boots to contrast the sweet pastel graphics. Score this nostalgic top for just $18.00 exclusively on depop today!", "total_ms": 1825.5, "queue_wait_ms": 0.0, "run_ms": 1825.4, "stage_ms": {"parse": 0.0, "search": 222.3, "compare_price": 221.5, "suggest_outfit": 827.8, "create_fit_card": 553.7}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 822, "output_tokens": 216, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:21.815+00:00", "request_id": "b9bce97122b0", "run_label": "m3-cost-paced", "route": "/ask", "query": "denim jacket under $60", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_007", "result_count": 7, "fit_card": "Channel effortless off-duty model energy with this structured light wash cropped denim jacket, perfect for building a high-contrast minimalist silhouette or leaning into full streetwear nostalgia. You can grab this versatile vintage staple for $42.00 over on poshmark right now. It's the ultimate clean slate ready to be styled into your go-to everyday rotation.", "total_ms": 1979.2, "queue_wait_ms": 0.0, "run_ms": 1978.8, "stage_ms": {"parse": 0.0, "search": 255.7, "compare_price": 226.9, "suggest_outfit": 780.7, "create_fit_card": 715.4}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 807, "output_tokens": 221, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:29.805+00:00", "request_id": "472018d98ee3", "run_label": "m3-cost-paced", "route": "/ask", "query": "floral dress under $35", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_013", "result_count": 1, "fit_card": "Channel effortless 90s indie sleaze by layering this floral midi with a cozy crewneck and edgy combat boots, or keep it casual with a classic black denim jacket and chunky sneakers. Grab this vintage silk slip dress for just $30.00 before it's gone. Find it listed now on depop!", "total_ms": 1958.9, "queue_wait_ms": 0.0, "run_ms": 1958.2, "stage_ms": {"parse": 0.0, "search": 261.7, "suggest_outfit": 999.7, "create_fit_card": 696.7}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 871, "output_tokens": 242, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:37.772+00:00", "request_id": "65d3945e0c35", "run_label": "m3-cost-paced", "route": "/ask", "query": "leather bag", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_039", "result_count": 4, "fit_card": "Channel effortless off-duty model energy with this casual streetwear look featuring an oversized grey crewneck and baggy dark denim. Add the Mini Shoulder Bag — Tan Leather to anchor the fit with a touch of classic 90s structure. Grab this vintage gem for $38.00 before it drops on poshmark!", "total_ms": 1880.2, "queue_wait_ms": 0.0, "run_ms": 1879.6, "stage_ms": {"parse": 0.0, "search": 274.3, "compare_price": 223.8, "suggest_outfit": 687.2, "create_fit_card": 694.1}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 794, "output_tokens": 200, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:45.658+00:00", "request_id": "282eafe4dd17", "run_label": "m3-cost-paced", "route": "/ask", "query": "flannel shirt under $25", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_003", "result_count": 2, "fit_card": "Channel peak 90s attitude with this effortlessly cool grunge streetwear fit featuring chunky combat boots and relaxed denim. Snag this oversized red and black plaid piece for just $22.00 to complete your layering rotation. You can find this exact top ready to style right now on thredUp.", "total_ms": 2173.6, "queue_wait_ms": 0.0, "run_ms": 2173.1, "stage_ms": {"parse": 0.0, "search": 259.2, "compare_price": 240.7, "suggest_outfit": 983.9, "create_fit_card": 689.3}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 875, "output_tokens": 271, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:53.840+00:00", "request_id": "5e4d6e4720ab", "run_label": "m3-cost-paced", "route": "/ask", "query": "vintage graphic tee under $30", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_002", "result_count": 10, "fit_card": "Channel your inner 2000s pop princess by pairing this butterfly print baby tee with baggy dark-wash denim and chunky white sneakers for the ultimate casual streetwear vibe. You can easily score this nostalgic piece for just $18.00 over on depop. It's the absolute cutest find for building an effortlessly sweet yet edgy wardrobe.", "total_ms": 1904.5, "queue_wait_ms": 0.0, "run_ms": 1904.0, "stage_ms": {"parse": 0.0, "search": 253.9, "compare_price": 225.8, "suggest_outfit": 671.6, "create_fit_card": 752.7}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 821, "output_tokens": 215, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:10:01.754+00:00", "request_id": "c5457a989217", "run_label": "m3-cost-paced", "route": "/ask", "query": "denim jacket under $60", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_007", "result_count": 7, "fit_card": "Channel effortless 90s nostalgia by pairing this structured light wash cropped denim jacket with a crisp white tank, baggy dark wash denim, and chunky sneakers for the ultimate off-duty streetwear look. Grab this blank-canvas vintage staple for $42.00 on poshmark before someone else snags it!", "total_ms": 1772.8, "queue_wait_ms": 0.0, "run_ms": 1772.3, "stage_ms": {"parse": 0.0, "search": 250.7, "compare_price": 226.2, "suggest_outfit": 681.6, "create_fit_card": 613.8}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 759, "output_tokens": 164, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:10:09.538+00:00", "request_id": "1ce5ecaa4622", "run_label": "m3-cost-paced", "route": "/ask", "query": "floral dress under $35", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_013", "result_count": 1, "fit_card": "Channel effortless 90s grunge-chic by layering this floral silk slip dress under an oversized crewneck and chunky combat boots. You can snag this vintage midi for just $30.00 right now over on depop.", "total_ms": 5453.9, "queue_wait_ms": 0.0, "run_ms": 5453.1, "stage_ms": {"parse": 0.0, "search": 259.3, "suggest_outfit": 999.0, "create_fit_card": 4194.7}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 851, "output_tokens": 203, "rate_limit_wait_s": 3.73, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:10:21.001+00:00", "request_id": "60359742c34a", "run_label": "m3-cost-paced", "route": "/ask", "query": "leather bag", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_039", "result_count": 4, "fit_card": "Channel effortless vintage streetwear energy with this structured tan leather Mini Shoulder Bag. It’s the ultimate Y2K accessory to sling over an oversized crewneck and baggy denim for a cool, lived-in look. Grab this classic camel piece for $38.00 exclusively on poshmark!", "total_ms": 2290.1, "queue_wait_ms": 0.0, "run_ms": 2289.5, "stage_ms": {"parse": 0.0, "search": 256.5, "compare_price": 223.8, "suggest_outfit": 1131.0, "create_fit_card": 678.1}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 793, "output_tokens": 194, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:10:29.298+00:00", "request_id": "f8ce034d8fc4", "run_label": "m3-cost-paced", "route": "/ask", "query": "flannel shirt under $25", "status": 200, "outcome": "fit_card", "error": null, "selected_item_id": "lst_003", "result_count": 2, "fit_card": "Channel the ultimate 90s anti-fashion energy by pairing this slouchy red-and-black plaid top with baggy denim and combat boots for a heavy dose of effortless grunge streetwear. Snag this versatile layering essential on thredUp for just $22.00 to instantly anchor your cool-girl transitional wardrobe.", "total_ms": 2184.2, "queue_wait_ms": 0.0, "run_ms": 2183.4, "stage_ms": {"parse": 0.0, "search": 274.3, "compare_price": 222.6, "suggest_outfit": 868.5, "create_fit_card": 817.9}, "model_calls": 2, "cache_hits": 0, "prompt_tokens": 850, "output_tokens": 251, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:01.106+00:00", "request_id": "1cc3c30ec23c", "run_label": "m3-failures", "route": "/ask", "query": null, "status": 400, "outcome": "bad_request", "error": "Send JSON with a 'query' field, e.g. {\"query\": \"vintage graphic tee under $30\"}", "selected_item_id": null, "result_count": null, "fit_card": null, "total_ms": 0.1, "queue_wait_ms": null, "run_ms": null, "stage_ms": {}, "model_calls": 0, "cache_hits": 0, "prompt_tokens": 0, "output_tokens": 0, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:01.107+00:00", "request_id": "915043b1fb17", "run_label": "m3-failures", "route": "/ask", "query": "", "status": 400, "outcome": "bad_request", "error": "Send JSON with a 'query' field, e.g. {\"query\": \"vintage graphic tee under $30\"}", "selected_item_id": null, "result_count": null, "fit_card": null, "total_ms": 0.0, "queue_wait_ms": null, "run_ms": null, "stage_ms": {}, "model_calls": 0, "cache_hits": 0, "prompt_tokens": 0, "output_tokens": 0, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:01.166+00:00", "request_id": "6ee2ccdd54bc", "run_label": "m3-nomatch", "route": "/ask", "query": "designer ballgown size XXS under $5", "status": 200, "outcome": "no_results", "error": "No listings matched after FitFindr dropped the size filter for XXS. Try broader keywords or a higher price limit.", "selected_item_id": null, "result_count": 0, "fit_card": null, "total_ms": 522.6, "queue_wait_ms": 0.0, "run_ms": 522.3, "stage_ms": {"parse": 0.0, "search": 295.6, "search_retry": 226.7}, "model_calls": 0, "cache_hits": 0, "prompt_tokens": 0, "output_tokens": 0, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+{"timestamp": "2026-11-15T00:09:01.690+00:00", "request_id": "1d32a80dace5", "run_label": "m3-nomatch", "route": "/ask", "query": "wool sweater under $40", "status": 200, "outcome": "no_results", "error": "No listings matched. Try broader keywords, a different size, or a higher price limit.", "selected_item_id": null, "result_count": 0, "fit_card": null, "total_ms": 252.2, "queue_wait_ms": 0.0, "run_ms": 252.1, "stage_ms": {"parse": 0.0, "search": 252.0}, "model_calls": 0, "cache_hits": 0, "prompt_tokens": 0, "output_tokens": 0, "rate_limit_wait_s": 0.0, "model": "gemini-3.5-flash-lite", "cache_enabled": false}
+```
+
+**A failed run, and one that left no record.** My first cost run sent the same
+ten queries back to back with no delay (`--label m3-cost`, report in
+`results/drive_m3-cost.md`). Eight returned fit cards. Requests 8 and 9 came
+back to the caller as `500` after almost exactly 30 seconds, and **neither has
+a line in the log**:
+
+```
+| 8 | {"query": "floral dress under $35"} | 500 | 30047.3 | - | non-JSON error body |
+| 9 | {"query": "leather bag"}            | 500 | 30261.5 | - | non-JSON error body |
+```
+
+gunicorn's own output from that run shows why:
+
+```
+  [rate limit] 15 requests used this minute. Waiting 46s. This is normal.
+[2026-11-14 19:08:00 -0500] [60205] [CRITICAL] WORKER TIMEOUT (pid:60207)
+  [rate limit] service pushed back. Waiting 58s (attempt 1 of 5). This is the limiter doing its job, not a bug.
+[2026-11-14 19:08:31 -0500] [60205] [CRITICAL] WORKER TIMEOUT (pid:60632)
+  [rate limit] 15 requests used this minute. Waiting 4s. This is normal.
+```
+
+Request 8 was the 15th model call in a minute, so `generate.py::_wait_for_slot`
+slept 46 seconds. gunicorn's default worker timeout is 30 seconds, so it killed
+the worker during the sleep, before `serve.py` could write the record. The
+replacement worker started with an empty rate-limit window, sent request 9's
+call straight away, got a 429 from Gemini, and was killed again during a
+58-second backoff. The log I built records every failure the service handles,
+but not one that kills the process running it. These two absences are visible
+only because `drive.py` compares what the caller saw with what the log holds.
+
+**What It Costs**
+
+Measured, not taken from a pricing page. I ran the five matching queries twice
+each against the running service, with the cache off and a six-second pause
+between requests so the rate limiter didn't distort the timing (`--label
+m3-cost-paced`, report in `results/drive_m3-cost-paced.md`). Each of the ten
+records carries the tokens Gemini reported on `usage_metadata` for that
+request's two model calls.
+
+| Measure (10 fit-card runs) | Mean | Min | Max |
+|---|---|---|---|
+| Model calls per run | 2 | 2 | 2 |
+| Prompt tokens per run | 824.3 | 759 | 875 |
+| Output tokens per run | 217.7 | 164 | 271 |
+| Total tokens per run | 1042 | 923 | 1146 |
+| Service time per run (`total_ms`) | 2342 ms | 1773 ms | 5454 ms |
+
+An empty search costs nothing: zero model calls and about 0.25 to 0.5 seconds
+of MCP search. A rejected body costs nothing and takes under a millisecond.
+
+Actual spend: $0. The key is on Gemini's free tier, so the real limit is the
+quota, not money. One fit-card run uses 2 of the 15 requests a minute the free
+tier allows.
+
+A hundred people a day, one fit-card query each: 100 × 1042 = 104,200 tokens a
+day (82,430 prompt + 21,770 output), and 100 × 2 = 200 model calls a day. At 15
+calls a minute that is about 13 minutes of the free tier's per-minute allowance
+if they all arrived at once; spread across a day it never comes near the
+limit. The dollar figure for paid use goes in Milestone 7.
