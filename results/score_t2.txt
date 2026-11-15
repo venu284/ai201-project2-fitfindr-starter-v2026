@@ -1,0 +1,6 @@
+Trial 2
+  C1 FAIL  requests with a log record: 9 of 10
+  C2 PASS  9 of 10 records with total_ms <= 2500; total_ms = [1849.5, 2371.8, 1716.7, 2220.7, 1942.9, 2059.6, 11673.7, 2226.5, 1973.6, 2108.1]
+  C3 PASS  10 of 10 records are fit_card with 2 calls and <= 1300 tokens; (outcome, calls, tokens) = [('fit_card', 2, 1025), ('fit_card', 2, 1024), ('fit_card', 2, 1078), ('fit_card', 2, 986), ('fit_card', 2, 1092), ('fit_card', 2, 1054), ('fit_card', 2, 1024), ('fit_card', 2, 1164), ('fit_card', 2, 994), ('fit_card', 2, 1116)]
+  C4 FAIL  9 of 10 returned 200 with fit_card or model_error within 65 s; failing: ["#8 status=500 client_ms=30953.4 error='non-JSON error body'"]
+  C5 PASS  4 of 4 bad bodies got 400 bad_request; 2 of 2 impossible queries got no_results; model calls across all 6: 0

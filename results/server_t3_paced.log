@@ -1,0 +1,8 @@
+[2026-11-15 00:36:56 -0500] [95203] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 00:36:56 -0500] [95203] [INFO] Listening at: http://127.0.0.1:8000 (95203)
+[2026-11-15 00:36:56 -0500] [95203] [INFO] Using worker: sync
+[2026-11-15 00:36:56 -0500] [95207] [INFO] Booting worker with pid: 95207
+  [rate limit] 15 requests used this minute. Waiting 8s. This is normal.
+[2026-11-15 00:38:24 -0500] [95203] [INFO] Handling signal: term
+[2026-11-15 00:38:24 -0500] [95207] [INFO] Worker exiting (pid: 95207)
+[2026-11-15 00:38:24 -0500] [95203] [INFO] Shutting down: Master

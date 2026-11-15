@@ -989,3 +989,137 @@ day (82,430 prompt + 21,770 output), and 100 × 2 = 200 model calls a day. At 15
 calls a minute that is about 13 minutes of the free tier's per-minute allowance
 if they all arrived at once; spread across a day it never comes near the
 limit. The dollar figure for paid use goes in Milestone 7.
+
+**Run Log and Verdicts**
+
+Three trials of every criterion in `criteria.md`, with nothing in the service
+changed between them. Each trial is one run of `./run_trial.sh N`, which starts
+the service with the RUNNING.md command, runs the C1/C4 burst, stops the
+service and idles 65 s so Gemini's per-minute window is clear, starts it again
+for the C2 warm-up, the C2/C3 paced run and the two C5 sets, then scores the
+trial with `score.py N`. `score.py` only applies the thresholds written in
+`criteria.md`; it reads the caller's rows from `results/drive_<label>.json` and
+the service's records from `logs/requests.jsonl`. Each trial was separated
+from the last by at least 65 s of idle.
+
+| Criterion | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|
+| C1. Every burst request has a log record (10 of 10) | 10/10 | 9/10 | 9/10 | MISSED |
+| C2. At least 9 of 10 paced requests at or under 2500 ms | 8/10 | 9/10 | 7/10 | MISSED |
+| C3. All 10 paced runs are fit cards, 2 calls, at most 1300 tokens | 10/10 | 10/10 | 10/10 | MET |
+| C4. All 10 burst requests get a 200 within 65 s, never a bare 500 | 10/10 | 9/10 | 9/10 | MISSED |
+| C5. 4/4 bad bodies get 400, 2/2 impossible queries get no_results, 0 calls | 6/6 | 6/6 | 6/6 | MET |
+
+A criterion is MET only when all three runs pass, because each one says "in
+each of 3 trials". The full output of every trial is in
+`results/trial_tN_console.txt`, the scores in `results/score_tN.txt`, the
+per-label reports in `results/drive_<label>.md`, and gunicorn's stderr in
+`results/server_tN_burst.log` and `results/server_tN_paced.log`.
+
+*C1, run 2.* The driver's `summarise()` in `drive.py` compares the request ids
+the caller received with the records `serve.py`'s `_finish()` wrote:
+
+```
+- requests sent: 10
+- status counts: 200: 9, 500: 1
+- requests with a log record: 9 of 10
+```
+
+Run 1 read 10 of 10 and run 3 read 9 of 10. Run 1 passed by luck, not because
+anything was different: Gemini was slow during that run (3 to 9 s per call, see
+C2), so the ten requests took about two minutes and never reached 15 model
+calls in one minute.
+
+*C4, runs 2 and 3.* `score.py`'s `c4()` on the caller's rows:
+
+```
+Trial 2  C4 FAIL  9 of 10 returned 200 with fit_card or model_error within 65 s;
+                  failing: ["#8 status=500 client_ms=30953.4 error='non-JSON error body'"]
+Trial 3  C4 FAIL  9 of 10 returned 200 with fit_card or model_error within 65 s;
+                  failing: ["#7 status=500 client_ms=30053.5 error='non-JSON error body'"]
+```
+
+The failing row from `results/drive_c1-burst-t3.json` has no `request_id`,
+which is why C1 failed in the same run:
+
+```
+{'body': {'query': 'denim jacket under $60'}, 'status': 500, 'client_ms': 30053.5,
+ 'request_id': None, 'outcome': 'non-JSON error body', 'client_error': None}
+```
+
+gunicorn's stderr for run 2 (`results/server_t2_burst.log`) shows where it
+happened. The traceback ends in `generate.py`'s `_wait_for_slot()` sleeping:
+
+```
+  [rate limit] 15 requests used this minute. Waiting 46s. This is normal.
+[2026-11-15 00:31:10 -0500] [92375] [CRITICAL] WORKER TIMEOUT (pid:92379)
+  File ".../serve.py", line 187, in ask
+    session = run_agent(query, wardrobe)
+  File ".../agent.py", line 294, in run_agent
+    session["fit_card"] = _timed(
+  File ".../tools.py", line 299, in create_fit_card
+    response = generate(prompt).strip()
+  File ".../generate.py", line 326, in generate
+    _wait_for_slot()
+  File ".../generate.py", line 123, in _wait_for_slot
+    time.sleep(sleep_for)
+  File ".../gunicorn/workers/base.py", line 204, in handle_abort
+    sys.exit(1)
+SystemExit: 1
+```
+
+Run 3 reached the same place by a different route: Gemini itself answered with
+a 429 before the local limiter filled, and the retry loop in `generate()` slept
+for the 46 s it asked for (`results/server_t3_burst.log`):
+
+```
+  [rate limit] service pushed back. Waiting 46s (attempt 1 of 5). This is the limiter doing its job, not a bug.
+[2026-11-15 00:35:44 -0500] [94388] [CRITICAL] WORKER TIMEOUT (pid:94392)
+SystemExit: 1
+```
+
+*C2, all runs.* `score.py`'s `c2()` reads `total_ms` from each record:
+
+```
+Trial 1  C2 FAIL  8 of 10 records with total_ms <= 2500; total_ms = [9926.6, 2021.6, 1693.0, 2157.0, 2447.0, 1881.1, 2025.4, 1987.3, 5150.0, 2151.2]
+Trial 2  C2 PASS  9 of 10 records with total_ms <= 2500; total_ms = [1849.5, 2371.8, 1716.7, 2220.7, 1942.9, 2059.6, 11673.7, 2226.5, 1973.6, 2108.1]
+Trial 3  C2 FAIL  7 of 10 records with total_ms <= 2500; total_ms = [1952.8, 2312.8, 1718.3, 1952.5, 2146.0, 2685.2, 9701.5, 2648.1, 2266.1, 1973.0]
+```
+
+The slowest record in run 3, written by `serve.py`'s `ask()` with the stage
+times from `agent.py`'s `_timed()`, shows the time went to the rate limiter,
+not the agent:
+
+```json
+{"request_id": "2f84d3e6af8b", "run_label": "c2-paced-t3", "status": 200, "outcome": "fit_card", "total_ms": 9701.5, "rate_limit_wait_s": 7.78, "stage_ms": {"parse": 0.0, "search": 262.0, "compare_price": 214.9, "suggest_outfit": 777.9, "create_fit_card": 8445.9}, "model_calls": 2, "prompt_tokens": 813, "output_tokens": 225}
+```
+
+The other run 3 misses (2685 and 2648 ms) had no limiter wait and are slow
+model calls. In run 1 the two misses were a slow first call (`suggest_outfit`
+took 8368 ms with no limiter wait) and a 3.05 s limiter wait.
+
+*C3, all runs.* `score.py`'s `c3()`:
+
+```
+Trial 1  C3 PASS  10 of 10 records are fit_card with 2 calls and <= 1300 tokens
+Trial 2  C3 PASS  10 of 10 ...
+Trial 3  C3 PASS  10 of 10 ...
+```
+
+Across the 30 records tokens ranged from 923 to 1164 and `model_calls` was 2
+every time; the per-record values are in `results/score_tN.txt`.
+
+*C5, all runs.* `score.py`'s `c5()`, and one record of each kind from run 2,
+written by `serve.py`'s `ask()` (the 400 path returns before the lock; the
+no-match path returns from `agent.py`'s `run_agent()` after the size retry):
+
+```
+Trial 1  C5 PASS  4 of 4 bad bodies got 400 bad_request; 2 of 2 impossible queries got no_results; model calls across all 6: 0
+Trial 2  C5 PASS  (same)
+Trial 3  C5 PASS  (same)
+```
+
+```json
+{"request_id": "331f936f212c", "run_label": "c5-bad-t2", "status": 400, "outcome": "bad_request", "total_ms": 0.0, "rate_limit_wait_s": 0.0, "stage_ms": {}, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0}
+{"request_id": "b31275d65f0a", "run_label": "c5-nomatch-t2", "status": 200, "outcome": "no_results", "total_ms": 440.2, "rate_limit_wait_s": 0.0, "stage_ms": {"parse": 0.0, "search": 221.6, "search_retry": 218.3}, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0}
+```

@@ -1,0 +1,96 @@
+[2026-11-15 00:35:00 -0500] [94388] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 00:35:00 -0500] [94388] [INFO] Listening at: http://127.0.0.1:8000 (94388)
+[2026-11-15 00:35:00 -0500] [94388] [INFO] Using worker: sync
+[2026-11-15 00:35:00 -0500] [94392] [INFO] Booting worker with pid: 94392
+  [rate limit] service pushed back. Waiting 46s (attempt 1 of 5). This is the limiter doing its job, not a bug.
+[2026-11-15 00:35:44 -0500] [94388] [CRITICAL] WORKER TIMEOUT (pid:94392)
+[2026-11-15 00:35:44 -0500] [94392] [ERROR] Error handling request /ask
+Traceback (most recent call last):
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/generate.py", line 341, in generate
+    response = client.models.generate_content(**kwargs)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/models.py", line 6331, in generate_content
+    response = self._generate_content(
+        model=model, contents=contents, config=parsed_config
+    )
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/models.py", line 4767, in _generate_content
+    response = self._api_client.request(
+        'post', path, request_dict, http_options
+    )
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/_api_client.py", line 1605, in request
+    response = self._request(http_request, http_options, stream=False)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/_api_client.py", line 1398, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/tenacity/__init__.py", line 470, in __call__
+    do = self.iter(retry_state=retry_state)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/tenacity/__init__.py", line 371, in iter
+    result = action(retry_state)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/tenacity/__init__.py", line 413, in exc_check
+    raise retry_exc.reraise()
+          ~~~~~~~~~~~~~~~~~^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/tenacity/__init__.py", line 184, in reraise
+    raise self.last_attempt.result()
+          ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/tenacity/__init__.py", line 473, in __call__
+    result = fn(*args, **kwargs)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/_api_client.py", line 1375, in _request_once
+    errors.APIError.raise_for_response(response)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/errors.py", line 155, in raise_for_response
+    cls.raise_error(response.status_code, response_json, response)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/google/genai/errors.py", line 184, in raise_error
+    raise ClientError(status_code, response_json, response)
+google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.5-flash-lite, description: Generate content requests per minute limit exceeded on Free Tier. See https://aistudio.google.com/docs/rate-limits.\nPlease retry in 45.471410454s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://aistudio.google.com/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'description': 'Generate content requests per minute limit exceeded on Free Tier. See https://aistudio.google.com/docs/rate-limits.', 'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier', 'quotaDimensions': {'model': 'gemini-3.5-flash-lite', 'location': 'global'}, 'quotaValue': '15'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '45s'}]}}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/gunicorn/workers/sync.py", line 134, in handle
+    self.handle_request(listener, req, client, addr)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/gunicorn/workers/sync.py", line 177, in handle_request
+    respiter = self.wsgi(environ, resp.start_response)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/flask/app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/serve.py", line 187, in ask
+    session = run_agent(query, wardrobe)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/agent.py", line 274, in run_agent
+    session["outfit_suggestion"] = _timed(
+                                   ~~~~~~^
+        session, "suggest_outfit", suggest_outfit,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        session["selected_item"], session["wardrobe"],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/agent.py", line 87, in _timed
+    return fn(*args)
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/tools.py", line 210, in suggest_outfit
+    response = generate(prompt).strip()
+               ~~~~~~~~^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/generate.py", line 368, in generate
+    time.sleep(backoff)
+    ~~~~~~~~~~^^^^^^^^^
+  File "/Users/venu/Documents/AI201/ai201-project2-fitfindr-starter-v2026/.venv/lib/python3.13/site-packages/gunicorn/workers/base.py", line 204, in handle_abort
+    sys.exit(1)
+    ~~~~~~~~^^^
+SystemExit: 1
+[2026-11-15 00:35:44 -0500] [94392] [INFO] Worker exiting (pid: 94392)
+[2026-11-15 00:35:44 -0500] [94709] [INFO] Booting worker with pid: 94709
+[2026-11-15 00:35:51 -0500] [94388] [INFO] Handling signal: term
+[2026-11-15 00:35:51 -0500] [94709] [INFO] Worker exiting (pid: 94709)
+[2026-11-15 00:35:51 -0500] [94388] [INFO] Shutting down: Master

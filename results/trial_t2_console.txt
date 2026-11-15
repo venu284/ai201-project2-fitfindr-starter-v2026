@@ -1,0 +1,75 @@
+== trial 2: C1/C4 burst ==
+Sending 10 requests (matching x2, 1 at a time) to http://127.0.0.1:8000 as 'c1-burst-t2'
+  [1/10] 200 2576.8ms  {"query": "vintage graphic tee under $30"}
+  [2/10] 200 1727.3ms  {"query": "denim jacket under $60"}
+  [3/10] 200 1697.2ms  {"query": "floral dress under $35"}
+  [4/10] 200 2071.6ms  {"query": "leather bag"}
+  [5/10] 200 2057.0ms  {"query": "flannel shirt under $25"}
+  [6/10] 200 1976.5ms  {"query": "vintage graphic tee under $30"}
+  [7/10] 200 1961.6ms  {"query": "denim jacket under $60"}
+  [8/10] 500 30953.4ms  {"query": "floral dress under $35"}
+  [9/10] 200 2552.4ms  {"query": "leather bag"}
+  [10/10] 200 1905.7ms  {"query": "flannel shirt under $25"}
+
+- requests sent: 10
+- status counts: 200: 9, 500: 1
+- requests with a log record: 9 of 10
+- caller-observed latency of 200s (ms): p50 1976.5, p90 2576.8, max 2576.8
+- queue wait (ms): mean 0, max 0
+- fit-card runs: 9; tokens per run mean 1058.7 (min 998, max 1138); model calls per run mean 2; cache hits 0
+- mean stage time over fit-card runs (ms): parse 0.0, search 289.4, compare_price 219.0, suggest_outfit 890.2, create_fit_card 657.5
+
+Report: results/drive_c1-burst-t2.md
+== idle 65 s so the per-minute window is clear ==
+== trial 2: C2/C3 warm-up and paced run, then C5 ==
+warm-up: 200 in 2.299214s
+Sending 10 requests (matching x2, 1 at a time) to http://127.0.0.1:8000 as 'c2-paced-t2'
+  [1/10] 200 1862.4ms  {"query": "vintage graphic tee under $30"}
+  [2/10] 200 2376.7ms  {"query": "denim jacket under $60"}
+  [3/10] 200 1722.0ms  {"query": "floral dress under $35"}
+  [4/10] 200 2224.4ms  {"query": "leather bag"}
+  [5/10] 200 1947.9ms  {"query": "flannel shirt under $25"}
+  [6/10] 200 2065.2ms  {"query": "vintage graphic tee under $30"}
+  [7/10] 200 11678.6ms  {"query": "denim jacket under $60"}
+  [8/10] 200 2231.6ms  {"query": "floral dress under $35"}
+  [9/10] 200 1978.5ms  {"query": "leather bag"}
+  [10/10] 200 2113.0ms  {"query": "flannel shirt under $25"}
+
+- requests sent: 10
+- status counts: 200: 10
+- requests with a log record: 10 of 10
+- caller-observed latency of 200s (ms): p50 2065.2, p90 2376.7, max 11678.6
+- queue wait (ms): mean 0, max 0
+- fit-card runs: 10; tokens per run mean 1055.7 (min 986, max 1164); model calls per run mean 2; cache hits 0
+- mean stage time over fit-card runs (ms): parse 0.0, search 264.1, compare_price 219.5, suggest_outfit 855.1, create_fit_card 1718.5
+
+Report: results/drive_c2-paced-t2.md
+Sending 4 requests (bad x1, 1 at a time) to http://127.0.0.1:8000 as 'c5-bad-t2'
+  [1/4] 400 11.0ms  {}
+  [2/4] 400 0.6ms  {"query": ""}
+  [3/4] 400 0.5ms  {"query": "   "}
+  [4/4] 400 0.5ms  {"query": 42}
+
+- requests sent: 4
+- status counts: 400: 4
+- requests with a log record: 4 of 4
+
+Report: results/drive_c5-bad-t2.md
+Sending 2 requests (no_match x1, 1 at a time) to http://127.0.0.1:8000 as 'c5-nomatch-t2'
+  [1/2] 200 449.0ms  {"query": "designer ballgown size XXS under $5"}
+  [2/2] 200 223.4ms  {"query": "wool sweater under $40"}
+
+- requests sent: 2
+- status counts: 200: 2
+- requests with a log record: 2 of 2
+- caller-observed latency of 200s (ms): p50 223.4, p90 449.0, max 449.0
+- queue wait (ms): mean 0, max 0
+
+Report: results/drive_c5-nomatch-t2.md
+
+Trial 2
+  C1 FAIL  requests with a log record: 9 of 10
+  C2 PASS  9 of 10 records with total_ms <= 2500; total_ms = [1849.5, 2371.8, 1716.7, 2220.7, 1942.9, 2059.6, 11673.7, 2226.5, 1973.6, 2108.1]
+  C3 PASS  10 of 10 records are fit_card with 2 calls and <= 1300 tokens; (outcome, calls, tokens) = [('fit_card', 2, 1025), ('fit_card', 2, 1024), ('fit_card', 2, 1078), ('fit_card', 2, 986), ('fit_card', 2, 1092), ('fit_card', 2, 1054), ('fit_card', 2, 1024), ('fit_card', 2, 1164), ('fit_card', 2, 994), ('fit_card', 2, 1116)]
+  C4 FAIL  9 of 10 returned 200 with fit_card or model_error within 65 s; failing: ["#8 status=500 client_ms=30953.4 error='non-JSON error body'"]
+  C5 PASS  4 of 4 bad bodies got 400 bad_request; 2 of 2 impossible queries got no_results; model calls across all 6: 0

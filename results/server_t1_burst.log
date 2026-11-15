@@ -1,0 +1,7 @@
+[2026-11-15 00:22:43 -0500] [89115] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 00:22:43 -0500] [89115] [INFO] Listening at: http://127.0.0.1:8000 (89115)
+[2026-11-15 00:22:43 -0500] [89115] [INFO] Using worker: sync
+[2026-11-15 00:22:43 -0500] [89119] [INFO] Booting worker with pid: 89119
+[2026-11-15 00:24:32 -0500] [89115] [INFO] Handling signal: term
+[2026-11-15 00:24:32 -0500] [89119] [INFO] Worker exiting (pid: 89119)
+[2026-11-15 00:24:32 -0500] [89115] [INFO] Shutting down: Master
