@@ -246,3 +246,93 @@ history is what shows your criteria existed before your results did.
 units.
 
 `results/` is deliberately **not** in `.gitignore`.
+
+---
+
+## Capstone (unit 9): running the instrumented service
+
+This is the run path for the Unit 9 capstone. It is **Path B, local with logs**:
+the service runs on your machine under gunicorn, started by one command, and
+every request is recorded in `logs/requests.jsonl`.
+
+### What the environment needs
+
+| Need | Version / size |
+|---|---|
+| Python | 3.11, 3.12 or 3.13 (tested on 3.13.3). Not 3.14 |
+| Dependencies | `requirements.txt`, pinned with upper and lower bounds. Tested with Flask 3.1.3, gunicorn 23.0.0, google-genai 1.75.0, mcp 1.30.0, python-dotenv 1.1.1 |
+| Model files | None. FitFindr runs no local model; both model calls go to Gemini (`gemini-3.5-flash-lite`). The installed virtual environment is about 90 MB |
+| Key | `GEMINI_API_KEY` in `.env` (copy `.env.example`) |
+| OS | macOS or Linux. gunicorn does not run on Windows; there, use `python serve.py` instead (same routes, same log) |
+
+### Setup, once, from a clean checkout
+
+```bash
+git clone https://github.com/venu284/ai201-project2-fitfindr-starter-v2026.git
+cd ai201-project2-fitfindr-starter-v2026
+git switch capstone            # until the capstone branch is merged into main
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env           # then paste your Gemini key into .env
+```
+
+### Start it: the one command
+
+```bash
+AI201_CACHE=0 gunicorn -w 1 -b 127.0.0.1:8000 serve:app
+```
+
+- `AI201_CACHE=0` turns off the response cache, so every request is a real
+  model call and the logged tokens and latency are real.
+- `-w 1` (one sync worker) is required. `generate.py`'s rate limiter and token
+  counters are per process; two workers would each allow 15 requests a minute
+  against the same key and would each keep their own counts.
+- Port 8000, not 5000: on macOS, port 5000 is taken by the AirPlay Receiver.
+
+### Check it
+
+In a second terminal (with the virtual environment active):
+
+```bash
+curl -s http://127.0.0.1:8000/health
+curl -s -X POST http://127.0.0.1:8000/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "denim jacket under $60"}'
+tail -n 1 logs/requests.jsonl
+```
+
+### Replay the fixed query sets
+
+```bash
+python drive.py --set matching --repeat 2 --label cost-check   # 10 fit-card runs
+python drive.py --set bad --label bad-input                    # 4 requests that should get 400
+python drive.py --set mixed --label trial1                     # all of the above once
+```
+
+Each run writes `results/drive_<label>.md` with what the caller saw, a summary
+(latency percentiles, tokens per run, mean time per stage), and the log lines
+for that label.
+
+### What a log record holds
+
+One JSON object per line in `logs/requests.jsonl` (override the path with
+`AI201_RUN_LOG`). Field by field:
+
+| Field | Meaning |
+|---|---|
+| `timestamp` | UTC time the request arrived |
+| `request_id` | Also returned in the `X-Request-Id` response header |
+| `run_label` | The `X-Run-Label` request header, if sent |
+| `query` | What came in |
+| `status` | HTTP status returned |
+| `outcome` | `fit_card`, `no_results`, `model_error`, `bad_request` or `server_error` |
+| `error` | The error message, if any |
+| `selected_item_id`, `result_count`, `fit_card` | What came out |
+| `total_ms` | Arrival to response, in the service |
+| `queue_wait_ms` | Time spent waiting for another request to finish |
+| `run_ms` | Time inside `run_agent` |
+| `stage_ms` | Time per agent stage: `parse`, `search`, `search_retry`, `compare_price`, `suggest_outfit`, `create_fit_card` |
+| `model_calls`, `cache_hits`, `prompt_tokens`, `output_tokens` | Model usage caused by this request |
+| `rate_limit_wait_s` | Seconds this request spent sleeping for the rate limiter or retrying |
+| `model`, `cache_enabled` | Configuration at the time |

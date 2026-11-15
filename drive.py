@@ -149,7 +149,7 @@ def summarise(rows: list[dict], records: list[dict]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--url", default="http://127.0.0.1:5000")
+    parser.add_argument("--url", default="http://127.0.0.1:8000")
     parser.add_argument("--set", choices=sorted(SETS), default="mixed")
     parser.add_argument("--repeat", type=int, default=1, help="passes through the set")
     parser.add_argument("--parallel", type=int, default=1, help="requests in flight at once")
