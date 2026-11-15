@@ -46,7 +46,7 @@ import uuid
 # and fixes the Windows console encoding for every module that imports it.
 import config  # noqa: F401
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 import generate
 import runlog
@@ -219,6 +219,15 @@ def ask():
     return jsonify(session)
 
 
+@app.after_request
+def _tag_response(response):
+    """Echo the log's request_id, so a caller can find its own line in the log."""
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        response.headers["X-Request-Id"] = request_id
+    return response
+
+
 def _ms(seconds: float) -> float:
     return round(seconds * 1000, 1)
 
@@ -238,6 +247,7 @@ def _outcome(session: dict) -> str:
 def _finish(record: dict, received: float) -> None:
     """Stamp the end-to-end time and write the record. Logging never breaks a reply."""
     record["total_ms"] = _ms(time.perf_counter() - received)
+    g.request_id = record["request_id"]
     try:
         runlog.write_record(record)
     except Exception as exc:  # noqa: BLE001
