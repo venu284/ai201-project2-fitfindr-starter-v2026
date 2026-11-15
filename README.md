@@ -960,6 +960,31 @@ call straight away, got a 429 from Gemini, and was killed again during a
 but not one that kills the process running it. These two absences are visible
 only because `drive.py` compares what the caller saw with what the log holds.
 
+*Stretch: latency breakdown.* Every record splits its time by agent stage
+(`stage_ms`, timed by `_timed()` in `agent.py`) and reports the time spent
+waiting on the rate limiter (`rate_limit_wait_s`, counted by `_add_wait()` in
+`generate.py`). Over the 117 fit-card runs from the six trials:
+
+| Stage | Runs | Mean ms | p50 | p90 | Max |
+|---|---|---|---|---|---|
+| `parse` | 117 | 0.0 | 0.0 | 0.0 | 0.0 |
+| `search` (MCP) | 117 | 276.6 | 258.4 | 353.1 | 488.8 |
+| `compare_price` (MCP) | 94 | 221.4 | 219.0 | 225.1 | 286.6 |
+| `suggest_outfit` (model call 1) | 117 | 1375.1 | 867.2 | 1545.9 | 9394.3 |
+| `create_fit_card` (model call 2) | 117 | 2633.8 | 781.7 | 5914.1 | 45160.1 |
+| `total_ms` | 117 | 4464.1 | 2266.1 | 9926.6 | 46359.9 |
+
+(`compare_price` runs only when more than one listing matched, so 94 of 117.)
+The two model calls take about the same time when nothing waits (p50 873 ms
+and 756 ms over the 108 runs with no rate-limit wait). The difference in the
+means is all rate limiter: 9 runs waited, and in all 9 the wait landed in
+`create_fit_card`, because the second call of a run is the one that tips the
+minute past 15 (3.05 to 9.14 s in the paced runs, about 44 s in the bursts).
+The two MCP stages together are about half a second, and each of them starts
+`mcp_server.py` as a new subprocess (I did not time the startup separately). So in a normal run the model is
+about three quarters of the time, and in a slow run the limiter is almost all
+of it.
+
 **What It Costs**
 
 Measured, not taken from a pricing page. I ran the five matching queries twice
@@ -988,7 +1013,34 @@ A hundred people a day, one fit-card query each: 100 × 1042 = 104,200 tokens a
 day (82,430 prompt + 21,770 output), and 100 × 2 = 200 model calls a day. At 15
 calls a minute that is about 13 minutes of the free tier's per-minute allowance
 if they all arrived at once; spread across a day it never comes near the
-limit. The dollar figure for paid use goes in Milestone 7.
+limit.
+
+The same numbers held across the 117 fit-card runs in the six M5 and M6
+trials (`c1-burst-t1..t6` and `c2-paced-t1..t6` in `logs/requests.jsonl`):
+mean 825.5 prompt + 220.8 output = 1046.3 tokens a run, range 898 to 1187, and
+exactly 2 model calls in every one. The 44 s rate-limit waits in the burst
+runs cost time but no tokens.
+
+What it would cost on the paid tier. Google's pricing page for
+`gemini-3.5-flash-lite` (https://aistudio.google.com/docs/pricing, Standard
+tier, checked 2026-11-15; the old ai.google.dev URL redirects there) lists
+$0.30 per 1M input tokens and $2.50 per 1M output tokens, and "Free of charge"
+for both on the free tier.
+
+- One run: 824.3 × $0.30 / 1,000,000 = $0.000247 for the prompt, plus
+  217.7 × $2.50 / 1,000,000 = $0.000544 for the output, so $0.000792 a run.
+- A hundred people a day: 82,430 × $0.30 / 1,000,000 = $0.0247, plus
+  21,770 × $2.50 / 1,000,000 = $0.0544, so $0.079 a day, or about $2.37 for a
+  30-day month.
+
+In one sentence: a hundred fit cards a day would cost about 8 cents a day on
+the paid tier and nothing on the free tier, and output tokens are two thirds
+of it even though they are a fifth of the tokens, because output costs about
+8 times as much per token. The free tier's binding limit is requests, not
+money: 15 a minute (the figure `config.py` paces to), so the burst in C1 and
+C4 is what hits it. The pricing page does not state the free tier's daily
+request cap for this model; it points to the AI Studio rate-limit page,
+which I did not check.
 
 **Run Log and Verdicts**
 
@@ -1209,3 +1261,86 @@ a generic one, and the gunicorn log shows nothing for it. That gap is listed
 under What's Still Broken. The service handled it the way C4 asks for (a
 200 with a clear error), but C3 requires every paced run to be a fit card, so
 it counts as a miss.
+
+**What's Still Broken**
+
+Two criteria are still missed after the improvement.
+
+- **C2 (paced requests within 2.5 s): missed before and after.** What I'd do:
+  merge `suggest_outfit` and `create_fit_card` into one model call that
+  returns both the outfit and the caption. That halves the calls per run, so
+  the C2 run would send about 11 calls a minute instead of more than 15, and
+  the limiter waits that land in `create_fit_card` (the latency breakdown
+  above) would go away; it also removes one round trip of about 0.8 s. It
+  would not fix the runs where a single Gemini call takes 3 to 9 s, so I
+  would expect 9 of 10 most of the time rather than always. Why I stopped: M6
+  allows one improvement, and I spent it on C1 and C4, where the bug was in
+  how the service runs, not in the provider or the quota. Merging the calls
+  also changes the agent itself, which is outside Shape A as I scoped it.
+- **C3 (every paced run a fit card): met before, missed in run 6.** One
+  request got `model_error` after 1.25 s because `generate()` raised
+  `ModelUnavailable` for a provider error that was not a 429. What I'd do:
+  first keep the provider's message. `agent.py`'s two `ModelUnavailable`
+  handlers replace it with "The model couldn't be reached...", so the log
+  record says nothing about what actually went wrong; putting `str(exc)` in
+  the record's `error` field is a two-line change. Then, depending on what it
+  was (a 503 "overloaded" would be the usual one), retry it once in
+  `generate.py` the way 429s already are. Why I stopped: without the
+  provider's message I would be guessing at what to retry, and it happened
+  once in 60 paced runs, so a re-run would most likely pass without proving
+  anything.
+
+Two problems no criterion caught, which I found while reading the code for
+the diagnosis:
+
+- **The session request budget never resets in a server.**
+  `SESSION_REQUEST_BUDGET = 300` in `config.py` was meant for one CLI session.
+  `serve.py` keeps one process alive, so after 300 model calls (150 fit
+  cards) `generate.py`'s `_check_budget()` raises `QuotaGuard` on every
+  request. `agent.py` only catches `ModelUnavailable`, so every request after
+  that is a 500 until the service restarts. I confirmed it with Flask's test
+  client by setting the counter to 300 (no model call was made):
+  `500 QuotaGuard: This session has made 300 requests, which is the budget set
+  in config.py (SESSION_REQUEST_BUDGET).` My trials never hit it because
+  `run_trial.sh` restarts the service twice per trial.
+- **A model call that hangs for more than 90 s still leaves no record.** The
+  improvement covers every sleep `generate.py` does, but not a network call
+  that never returns. gunicorn would kill the worker with `SystemExit`, which
+  goes past `except Exception` in `serve.py` exactly as before. A timeout on
+  the Gemini client below 90 s would turn that into a `ModelUnavailable` and a
+  logged 200.
+
+*What I'd do next.* If this were real and I had another unit, I would fix the
+request budget first, by making it a limit per minute or per request instead
+of per process. It is the only failure here that is certain rather than
+occasional: every user gets a 500 after the 150th fit card, and nothing in
+the log or the response says why until someone reads the traceback.
+
+**How I Used AI**
+
+I used Claude Code (in VS Code) for this capstone: to pick which of my four
+projects to extend, to write the instrumentation, the driver and the trial
+scripts, and to run the trials. Two moments where what it gave me was not
+what I used as-is:
+
+1. *The criteria.* I asked it to plan the five criteria and hand them to a
+   new agent to generate, so I could adjust them. It declined, because the
+   course requires the criteria to be my own, and gave me what to focus on
+   instead: mostly about the extension, built on the M3 measurements, and
+   covering the failure paths M3 had shown. I wrote all five myself from the
+   M3 numbers. When I asked it to check the file, it found that my reason for
+   C5 misstated what M3 had already tested: `--label m3-failures` had sent
+   all four bad bodies. I rewrote that sentence
+   before committing `criteria.md`.
+2. *The improvement.* After the before runs, it read the gunicorn traceback
+   and traced the missing records to `SystemExit` from the worker timeout
+   getting past `except Exception`. It offered two fixes: raise gunicorn's
+   timeout, or make `generate.py` give up on long waits and return a
+   `model_error` straight away. Both would pass C4. I chose the timeout,
+   because it keeps the fit card instead of turning a slow answer into an
+   error, and it leaves the course's `generate.py` alone. Putting it in
+   `gunicorn.conf.py` rather than on the command line kept the start command
+   in my criteria unchanged, so the after runs used the same command as the
+   before runs. It also pointed out that trial 1 passing C1 was luck (Gemini
+   was slow enough that the burst never hit the limiter), so I reported it
+   that way instead of counting it as evidence the log was fine.
