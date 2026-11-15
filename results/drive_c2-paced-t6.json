@@ -1,0 +1,106 @@
+{
+ "label": "c2-paced-t6",
+ "set": "matching",
+ "rows": [
+  {
+   "body": {
+    "query": "vintage graphic tee under $30"
+   },
+   "status": 200,
+   "client_ms": 2286.9,
+   "request_id": "6e5a386e7573",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "denim jacket under $60"
+   },
+   "status": 200,
+   "client_ms": 2027.0,
+   "request_id": "146794fc5b6c",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "floral dress under $35"
+   },
+   "status": 200,
+   "client_ms": 1926.3,
+   "request_id": "260265754ae0",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "leather bag"
+   },
+   "status": 200,
+   "client_ms": 1967.7,
+   "request_id": "b6a668ea43fb",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "flannel shirt under $25"
+   },
+   "status": 200,
+   "client_ms": 1751.3,
+   "request_id": "59dd4cbfa215",
+   "outcome": "The model couldn't be reached while suggesting an outfit. Ch",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "vintage graphic tee under $30"
+   },
+   "status": 200,
+   "client_ms": 2603.0,
+   "request_id": "9c02036bafa0",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "denim jacket under $60"
+   },
+   "status": 200,
+   "client_ms": 3304.2,
+   "request_id": "ba8753fee669",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "floral dress under $35"
+   },
+   "status": 200,
+   "client_ms": 2397.6,
+   "request_id": "fd7bb8079f2e",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "leather bag"
+   },
+   "status": 200,
+   "client_ms": 2374.3,
+   "request_id": "70e78883d959",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "flannel shirt under $25"
+   },
+   "status": 200,
+   "client_ms": 2400.8,
+   "request_id": "227b95616793",
+   "outcome": "fit_card",
+   "client_error": null
+  }
+ ]
+}

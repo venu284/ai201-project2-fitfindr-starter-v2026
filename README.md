@@ -1123,3 +1123,89 @@ Trial 3  C5 PASS  (same)
 {"request_id": "331f936f212c", "run_label": "c5-bad-t2", "status": 400, "outcome": "bad_request", "total_ms": 0.0, "rate_limit_wait_s": 0.0, "stage_ms": {}, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0}
 {"request_id": "b31275d65f0a", "run_label": "c5-nomatch-t2", "status": 200, "outcome": "no_results", "total_ms": 440.2, "rate_limit_wait_s": 0.0, "stage_ms": {"parse": 0.0, "search": 221.6, "search_retry": 218.3}, "model_calls": 0, "prompt_tokens": 0, "output_tokens": 0}
 ```
+
+**The Improvement**
+
+*Diagnosis of each missed criterion (from the M5 runs above).*
+
+- **C1 and C4, one cause.** Stage: the second model call, inside
+  `generate.py`. When a burst passes 15 calls in a minute, `generate()` sleeps
+  before the next call. In run 2 that was `_wait_for_slot()` (local limiter,
+  46 s); in run 3 it was the retry loop after Gemini returned a 429 (46 s, the
+  delay Gemini asked for). gunicorn's default worker timeout is 30 s, so the
+  arbiter aborts the worker mid-sleep with `SystemExit` (the `handle_abort`
+  frame in `results/server_t2_burst.log`). `SystemExit` is a `BaseException`,
+  so the `except Exception` in `serve.py`'s `ask()` never sees it and
+  `_finish()` never runs: no log record (C1) and gunicorn's own HTML 500 page
+  for the caller (C4). Run 1 passed only because Gemini was slow enough that
+  run that the burst never reached 15 calls a minute.
+- **C2.** Stage: also `create_fit_card`'s model call. Two causes, both outside
+  the service code. The warm-up's 2 calls plus 20 paced calls at about 8 s
+  spacing exceed 15 calls in a 60 s window, so one request per run waits
+  3 to 9 s in `_wait_for_slot()` (`rate_limit_wait_s` 7.78 in the run 3
+  record above). The rest are single Gemini calls that take 2.5 to 8 s with no
+  limiter wait. I did not try to fix C2: the first cause is the free-tier
+  quota meeting my own test's pacing, and the second is the provider.
+
+*What I changed.* One new file, `gunicorn.conf.py`, which gunicorn loads from
+the working directory on its own, so the start command in RUNNING.md and in
+`criteria.md` is unchanged:
+
+```python
+timeout = 90
+```
+
+90 s covers the longest sleep `generate.py` can do inside one request (65 s,
+the cap in `_retry_delay()`; `_wait_for_slot()` waits at most about 60 s) plus
+one agent run. `gunicorn --print-config serve:app` now reports
+`timeout = 90`. No agent, tool or logging code changed. RUNNING.md has a note
+that the service must be started from the repo root so the file is found.
+
+*Re-run.* Three more full trials with the same script and the same 65 s idle
+between them, labelled t4 to t6 so the before files are untouched
+(`./run_trial.sh 4`, `5`, `6`; scores in `results/score_t4.txt` to
+`score_t6.txt`).
+
+| Criterion | Before: Run 1 | Run 2 | Run 3 | Verdict | After: Run 4 | Run 5 | Run 6 | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| C1. Log record per burst request | 10/10 | 9/10 | 9/10 | MISSED | 10/10 | 10/10 | 10/10 | MET |
+| C2. At least 9 of 10 paced at or under 2500 ms | 8/10 | 9/10 | 7/10 | MISSED | 8/10 | 5/10 | 8/10 | MISSED |
+| C3. Fit card, 2 calls, at most 1300 tokens | 10/10 | 10/10 | 10/10 | MET | 10/10 | 10/10 | 9/10 | MISSED |
+| C4. 200 within 65 s, never a bare 500 | 10/10 | 9/10 | 9/10 | MISSED | 10/10 | 10/10 | 10/10 | MET |
+| C5. Bad input and no-match, 0 calls | 6/6 | 6/6 | 6/6 | MET | 6/6 | 6/6 | 6/6 | MET |
+
+*Did it help, and how do I know.* Yes for C1 and C4, and the after runs
+exercised the failure rather than avoiding it. In every after trial the
+eighth burst request hit the limiter for about 44 s, longer than the old 30 s
+timeout, and still came back. The server logs show the sleep and no
+`WORKER TIMEOUT` (`results/server_t4_burst.log`, same in t5 and t6):
+
+```
+  [rate limit] 15 requests used this minute. Waiting 44s. This is normal.
+```
+
+and the record `serve.py` wrote for that request in run 4:
+
+```json
+{"request_id": "81039153aee1", "run_label": "c1-burst-t4", "status": 200, "outcome": "fit_card", "total_ms": 46124.2, "rate_limit_wait_s": 44.06, "stage_ms": {"parse": 0.0, "search": 245.2, "suggest_outfit": 718.4, "create_fit_card": 45160.1}}
+```
+
+(runs 5 and 6: 46359.9 ms with 43.97 s waited, and 46224.5 ms with 44.29 s
+waited, both `fit_card`). The caller waited about 46 s for a fit card instead
+of getting an HTML 500 at 30 s, inside C4's 65 s limit.
+
+C2 stayed missed, as expected, since nothing changed on its path. Run 5's
+5 of 10 had one 6.39 s limiter wait; the other four misses were 2.6 to 3.2 s
+with no wait, so Gemini was slower in that run.
+
+C3 went from MET to MISSED in run 6, and not because of the change. One paced
+request (`59dd4cbfa215`, "flannel shirt under $25") returned
+`outcome: "model_error"` after 1.25 s in `suggest_outfit` with
+`model_calls: 1` and no rate-limit wait. That is `generate()` raising
+`ModelUnavailable` for a non-429 provider error, which a 90 s worker timeout
+cannot cause or prevent. The record cannot say which error it was, because
+`agent.py`'s `ModelUnavailable` handler replaces the provider's message with
+a generic one, and the gunicorn log shows nothing for it. That gap is listed
+under What's Still Broken. The service handled it the way C4 asks for (a
+200 with a clear error), but C3 requires every paced run to be a fit card, so
+it counts as a miss.

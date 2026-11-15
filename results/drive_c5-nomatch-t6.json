@@ -1,0 +1,26 @@
+{
+ "label": "c5-nomatch-t6",
+ "set": "no_match",
+ "rows": [
+  {
+   "body": {
+    "query": "designer ballgown size XXS under $5"
+   },
+   "status": 200,
+   "client_ms": 447.4,
+   "request_id": "5428182d6e70",
+   "outcome": "No listings matched after FitFindr dropped the size filter f",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "wool sweater under $40"
+   },
+   "status": 200,
+   "client_ms": 220.8,
+   "request_id": "2a00ba59b69b",
+   "outcome": "No listings matched. Try broader keywords, a different size,",
+   "client_error": null
+  }
+ ]
+}

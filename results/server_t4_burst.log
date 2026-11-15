@@ -1,0 +1,8 @@
+[2026-11-15 00:52:33 -0500] [2143] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 00:52:33 -0500] [2143] [INFO] Listening at: http://127.0.0.1:8000 (2143)
+[2026-11-15 00:52:33 -0500] [2143] [INFO] Using worker: sync
+[2026-11-15 00:52:33 -0500] [2147] [INFO] Booting worker with pid: 2147
+  [rate limit] 15 requests used this minute. Waiting 44s. This is normal.
+[2026-11-15 00:53:40 -0500] [2143] [INFO] Handling signal: term
+[2026-11-15 00:53:40 -0500] [2147] [INFO] Worker exiting (pid: 2147)
+[2026-11-15 00:53:40 -0500] [2143] [INFO] Shutting down: Master

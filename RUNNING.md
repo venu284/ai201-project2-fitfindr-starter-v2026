@@ -289,6 +289,11 @@ AI201_CACHE=0 gunicorn -w 1 -b 127.0.0.1:8000 serve:app
   counters are per process; two workers would each allow 15 requests a minute
   against the same key and would each keep their own counts.
 - Port 8000, not 5000: on macOS, port 5000 is taken by the AirPlay Receiver.
+- Run it from the repo root. gunicorn reads `gunicorn.conf.py` from the
+  current directory, and that file raises the worker timeout from 30 s to 90 s
+  (the capstone M6 improvement). Without it, a request that waits on the rate
+  limiter for more than 30 s is killed and gets an HTML 500 with no log
+  record. Check with `gunicorn --print-config serve:app | grep ^timeout`.
 
 ### Check it
 

@@ -1,0 +1,106 @@
+{
+ "label": "c2-paced-t5",
+ "set": "matching",
+ "rows": [
+  {
+   "body": {
+    "query": "vintage graphic tee under $30"
+   },
+   "status": 200,
+   "client_ms": 2453.5,
+   "request_id": "38e14e6e71a6",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "denim jacket under $60"
+   },
+   "status": 200,
+   "client_ms": 2451.4,
+   "request_id": "c6dfe5ff0ce5",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "floral dress under $35"
+   },
+   "status": 200,
+   "client_ms": 1959.9,
+   "request_id": "e7fee18d1199",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "leather bag"
+   },
+   "status": 200,
+   "client_ms": 3214.7,
+   "request_id": "975a188a70bc",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "flannel shirt under $25"
+   },
+   "status": 200,
+   "client_ms": 2696.9,
+   "request_id": "2065f57d2cd4",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "vintage graphic tee under $30"
+   },
+   "status": 200,
+   "client_ms": 1920.4,
+   "request_id": "bc2e71bfb675",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "denim jacket under $60"
+   },
+   "status": 200,
+   "client_ms": 8403.9,
+   "request_id": "5628d04a1ef7",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "floral dress under $35"
+   },
+   "status": 200,
+   "client_ms": 2721.6,
+   "request_id": "d553b4c99ccf",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "leather bag"
+   },
+   "status": 200,
+   "client_ms": 2343.2,
+   "request_id": "406d4dd02a15",
+   "outcome": "fit_card",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "flannel shirt under $25"
+   },
+   "status": 200,
+   "client_ms": 2635.7,
+   "request_id": "34be6dd95399",
+   "outcome": "fit_card",
+   "client_error": null
+  }
+ ]
+}

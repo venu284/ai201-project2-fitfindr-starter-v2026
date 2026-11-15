@@ -1,0 +1,75 @@
+== trial 6: C1/C4 burst ==
+Sending 10 requests (matching x2, 1 at a time) to http://127.0.0.1:8000 as 'c1-burst-t6'
+  [1/10] 200 2968.9ms  {"query": "vintage graphic tee under $30"}
+  [2/10] 200 2248.8ms  {"query": "denim jacket under $60"}
+  [3/10] 200 2119.5ms  {"query": "floral dress under $35"}
+  [4/10] 200 2184.5ms  {"query": "leather bag"}
+  [5/10] 200 2376.6ms  {"query": "flannel shirt under $25"}
+  [6/10] 200 1945.7ms  {"query": "vintage graphic tee under $30"}
+  [7/10] 200 1900.7ms  {"query": "denim jacket under $60"}
+  [8/10] 200 46229.2ms  {"query": "floral dress under $35"}
+  [9/10] 200 2945.3ms  {"query": "leather bag"}
+  [10/10] 200 2829.3ms  {"query": "flannel shirt under $25"}
+
+- requests sent: 10
+- status counts: 200: 10
+- requests with a log record: 10 of 10
+- caller-observed latency of 200s (ms): p50 2248.8, p90 2968.9, max 46229.2
+- queue wait (ms): mean 0, max 0
+- fit-card runs: 10; tokens per run mean 1044.9 (min 995, max 1115); model calls per run mean 2; cache hits 0
+- mean stage time over fit-card runs (ms): parse 0.0, search 287.2, compare_price 224.5, suggest_outfit 981.9, create_fit_card 5321.0
+
+Report: results/drive_c1-burst-t6.md
+== idle 65 s so the per-minute window is clear ==
+== trial 6: C2/C3 warm-up and paced run, then C5 ==
+warm-up: 200 in 2.872413s
+Sending 10 requests (matching x2, 1 at a time) to http://127.0.0.1:8000 as 'c2-paced-t6'
+  [1/10] 200 2286.9ms  {"query": "vintage graphic tee under $30"}
+  [2/10] 200 2027.0ms  {"query": "denim jacket under $60"}
+  [3/10] 200 1926.3ms  {"query": "floral dress under $35"}
+  [4/10] 200 1967.7ms  {"query": "leather bag"}
+  [5/10] 200 1751.3ms  {"query": "flannel shirt under $25"}
+  [6/10] 200 2603.0ms  {"query": "vintage graphic tee under $30"}
+  [7/10] 200 3304.2ms  {"query": "denim jacket under $60"}
+  [8/10] 200 2397.6ms  {"query": "floral dress under $35"}
+  [9/10] 200 2374.3ms  {"query": "leather bag"}
+  [10/10] 200 2400.8ms  {"query": "flannel shirt under $25"}
+
+- requests sent: 10
+- status counts: 200: 10
+- requests with a log record: 10 of 10
+- caller-observed latency of 200s (ms): p50 2286.9, p90 2603.0, max 3304.2
+- queue wait (ms): mean 0, max 0
+- fit-card runs: 9; tokens per run mean 1028.1 (min 938, max 1101); model calls per run mean 2; cache hits 0
+- mean stage time over fit-card runs (ms): parse 0.0, search 257.4, compare_price 218.8, suggest_outfit 837.2, create_fit_card 1094.1
+
+Report: results/drive_c2-paced-t6.md
+Sending 4 requests (bad x1, 1 at a time) to http://127.0.0.1:8000 as 'c5-bad-t6'
+  [1/4] 400 11.2ms  {}
+  [2/4] 400 0.6ms  {"query": ""}
+  [3/4] 400 0.5ms  {"query": "   "}
+  [4/4] 400 0.5ms  {"query": 42}
+
+- requests sent: 4
+- status counts: 400: 4
+- requests with a log record: 4 of 4
+
+Report: results/drive_c5-bad-t6.md
+Sending 2 requests (no_match x1, 1 at a time) to http://127.0.0.1:8000 as 'c5-nomatch-t6'
+  [1/2] 200 447.4ms  {"query": "designer ballgown size XXS under $5"}
+  [2/2] 200 220.8ms  {"query": "wool sweater under $40"}
+
+- requests sent: 2
+- status counts: 200: 2
+- requests with a log record: 2 of 2
+- caller-observed latency of 200s (ms): p50 220.8, p90 447.4, max 447.4
+- queue wait (ms): mean 0, max 0
+
+Report: results/drive_c5-nomatch-t6.md
+
+Trial 6
+  C1 PASS  requests with a log record: 10 of 10
+  C2 FAIL  8 of 10 records with total_ms <= 2500; total_ms = [2273.3, 2021.6, 1921.6, 1962.6, 1746.3, 2598.6, 3299.9, 2392.6, 2369.5, 2396.2]
+  C3 FAIL  9 of 10 records are fit_card with 2 calls and <= 1300 tokens; (outcome, calls, tokens) = [('fit_card', 2, 1035), ('fit_card', 2, 938), ('fit_card', 2, 1101), ('fit_card', 2, 947), ('model_error', 1, 0), ('fit_card', 2, 1043), ('fit_card', 2, 1038), ('fit_card', 2, 1097), ('fit_card', 2, 976), ('fit_card', 2, 1078)]
+  C4 PASS  10 of 10 returned 200 with fit_card or model_error within 65 s
+  C5 PASS  4 of 4 bad bodies got 400 bad_request; 2 of 2 impossible queries got no_results; model calls across all 6: 0

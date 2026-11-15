@@ -1,0 +1,7 @@
+[2026-11-15 01:04:37 -0500] [7314] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 01:04:37 -0500] [7314] [INFO] Listening at: http://127.0.0.1:8000 (7314)
+[2026-11-15 01:04:37 -0500] [7314] [INFO] Using worker: sync
+[2026-11-15 01:04:37 -0500] [7318] [INFO] Booting worker with pid: 7318
+[2026-11-15 01:05:58 -0500] [7314] [INFO] Handling signal: term
+[2026-11-15 01:05:58 -0500] [7318] [INFO] Worker exiting (pid: 7318)
+[2026-11-15 01:05:58 -0500] [7314] [INFO] Shutting down: Master

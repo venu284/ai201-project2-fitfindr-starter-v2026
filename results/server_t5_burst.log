@@ -1,0 +1,8 @@
+[2026-11-15 00:57:29 -0500] [4296] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 00:57:29 -0500] [4296] [INFO] Listening at: http://127.0.0.1:8000 (4296)
+[2026-11-15 00:57:29 -0500] [4296] [INFO] Using worker: sync
+[2026-11-15 00:57:29 -0500] [4300] [INFO] Booting worker with pid: 4300
+  [rate limit] 15 requests used this minute. Waiting 44s. This is normal.
+[2026-11-15 00:58:37 -0500] [4296] [INFO] Handling signal: term
+[2026-11-15 00:58:37 -0500] [4300] [INFO] Worker exiting (pid: 4300)
+[2026-11-15 00:58:37 -0500] [4296] [INFO] Shutting down: Master

@@ -1,0 +1,8 @@
+[2026-11-15 00:54:45 -0500] [3108] [INFO] Starting gunicorn 23.0.0
+[2026-11-15 00:54:45 -0500] [3108] [INFO] Listening at: http://127.0.0.1:8000 (3108)
+[2026-11-15 00:54:45 -0500] [3108] [INFO] Using worker: sync
+[2026-11-15 00:54:45 -0500] [3112] [INFO] Booting worker with pid: 3112
+  [rate limit] 15 requests used this minute. Waiting 8s. This is normal.
+[2026-11-15 00:56:15 -0500] [3108] [INFO] Handling signal: term
+[2026-11-15 00:56:15 -0500] [3112] [INFO] Worker exiting (pid: 3112)
+[2026-11-15 00:56:15 -0500] [3108] [INFO] Shutting down: Master

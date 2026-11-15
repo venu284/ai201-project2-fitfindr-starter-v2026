@@ -1,0 +1,44 @@
+{
+ "label": "c5-bad-t6",
+ "set": "bad",
+ "rows": [
+  {
+   "body": {},
+   "status": 400,
+   "client_ms": 11.2,
+   "request_id": "9a70ea6bf203",
+   "outcome": "Send JSON with a 'query' field, e.g. {\"query\": \"vintage grap",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": ""
+   },
+   "status": 400,
+   "client_ms": 0.6,
+   "request_id": "5b95e3efa9f7",
+   "outcome": "Send JSON with a 'query' field, e.g. {\"query\": \"vintage grap",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": "   "
+   },
+   "status": 400,
+   "client_ms": 0.5,
+   "request_id": "da248ed1a2d4",
+   "outcome": "Send JSON with a 'query' field, e.g. {\"query\": \"vintage grap",
+   "client_error": null
+  },
+  {
+   "body": {
+    "query": 42
+   },
+   "status": 400,
+   "client_ms": 0.5,
+   "request_id": "a2551d1fe10d",
+   "outcome": "Send JSON with a 'query' field, e.g. {\"query\": \"vintage grap",
+   "client_error": null
+  }
+ ]
+}

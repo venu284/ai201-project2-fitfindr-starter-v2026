@@ -1,0 +1,6 @@
+Trial 4
+  C1 PASS  requests with a log record: 10 of 10
+  C2 FAIL  8 of 10 records with total_ms <= 2500; total_ms = [2471.2, 2048.2, 2387.0, 2110.4, 1936.0, 2010.0, 10628.5, 2449.2, 3104.3, 2308.2]
+  C3 PASS  10 of 10 records are fit_card with 2 calls and <= 1300 tokens; (outcome, calls, tokens) = [('fit_card', 2, 1037), ('fit_card', 2, 935), ('fit_card', 2, 1147), ('fit_card', 2, 1051), ('fit_card', 2, 1074), ('fit_card', 2, 1041), ('fit_card', 2, 903), ('fit_card', 2, 1187), ('fit_card', 2, 1008), ('fit_card', 2, 1133)]
+  C4 PASS  10 of 10 returned 200 with fit_card or model_error within 65 s
+  C5 PASS  4 of 4 bad bodies got 400 bad_request; 2 of 2 impossible queries got no_results; model calls across all 6: 0
