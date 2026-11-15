@@ -208,6 +208,12 @@ def main() -> int:
     lines += [json.dumps(r, ensure_ascii=False) for r in records]
     lines += ["```", ""]
     out.write_text("\n".join(lines), encoding="utf-8")
+    # The same caller-side rows as JSON, so score.py can read them without
+    # parsing the Markdown table.
+    out.with_suffix(".json").write_text(
+        json.dumps({"label": args.label, "set": args.set, "rows": rows}, indent=1),
+        encoding="utf-8",
+    )
 
     print("\n" + "\n".join(summary))
     print(f"\nReport: {out.relative_to(ROOT)}")
